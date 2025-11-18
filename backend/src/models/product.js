@@ -158,6 +158,94 @@ const Product = {
     );
     return rows[0].total;
   },
+
+  // Nhập hàng theo túi: tạo nhiều products cùng tên nhưng khác size
+  createBatch: async (baseProduct, sizes) => {
+    // baseProduct: {name, description, price, category_id, image_url, discount_price, brand, color}
+    // sizes: [{size_eu, stock_quantity}]
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const results = [];
+      for (const size of sizes) {
+        // Chuyển size_eu thành string để tương thích với VARCHAR(50) trong database
+        const sizeValue = size.size_eu ? String(size.size_eu) : null;
+
+        const [result] = await connection.execute(
+          `INSERT INTO products 
+           (name, description, price, category_id, stock_quantity, image_url, discount_price, brand, size, color) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            baseProduct.name,
+            baseProduct.description || null,
+            baseProduct.price,
+            baseProduct.category_id,
+            size.stock_quantity || 0,
+            baseProduct.image_url || null,
+            baseProduct.discount_price || null,
+            baseProduct.brand || null,
+            sizeValue,
+            baseProduct.color || null,
+          ]
+        );
+        results.push(result);
+      }
+
+      await connection.commit();
+      return results;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
+
+  // Tìm sản phẩm theo name và size (để cập nhật tồn kho khi nhập)
+  findByNameAndSize: async (name, sizeEu) => {
+    // Chuyển size thành string để tương thích với VARCHAR
+    const sizeValue = sizeEu ? String(sizeEu) : null;
+    const [rows] = await db.execute(
+      "SELECT * FROM products WHERE name = ? AND size = ?",
+      [name, sizeValue]
+    );
+    return rows[0];
+  },
+
+  // Cập nhật tồn kho (thêm vào)
+  updateStock: async (productId, quantity) => {
+    const [result] = await db.execute(
+      "UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?",
+      [quantity, productId]
+    );
+    return result;
+  },
+
+  // Giảm tồn kho (khi bán)
+  decreaseStock: async (productId, quantity) => {
+    const [result] = await db.execute(
+      "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND stock_quantity >= ?",
+      [quantity, productId, quantity]
+    );
+    return result;
+  },
+
+  // Kiểm tra tồn kho
+  checkStock: async (productId, quantity) => {
+    const product = await Product.getById(productId);
+    if (!product) return false;
+    return product.stock_quantity >= quantity;
+  },
+
+  // Lấy tất cả size của một sản phẩm (theo name)
+  getByProductName: async (productName) => {
+    const [rows] = await db.execute(
+      "SELECT * FROM products WHERE name = ? ORDER BY CAST(size AS DECIMAL(3,1)) ASC, size ASC",
+      [productName]
+    );
+    return rows;
+  },
 };
 
 module.exports = Product;
