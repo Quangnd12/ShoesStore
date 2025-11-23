@@ -68,6 +68,13 @@ export const salesInvoicesAPI = {
   create: (data) => api.post("/sales-invoices", data),
 };
 
+// Return / Exchange API
+export const returnExchangesAPI = {
+  getAll: (params) => api.get("/return-exchanges", { params }),
+  getById: (id) => api.get(`/return-exchanges/${id}`),
+  create: (data) => api.post("/return-exchanges", data),
+};
+
 // Reports API
 export const reportsAPI = {
   getDaily: (date) => api.get("/reports/daily", { params: { date } }),

@@ -43,12 +43,111 @@ const PurchaseInvoices = () => {
     },
   ]);
 
+  const [filters, setFilters] = useState({
+    invoiceNumber: "",
+    supplier: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+
   useEffect(() => {
     fetchInvoices();
     fetchSuppliers();
     fetchProducts();
     fetchCategories();
   }, []);
+
+  const generateInvoiceNumber = async () => {
+    try {
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      const prefix = `PN${dateStr}`;
+
+      // Lấy tất cả hóa đơn nhập trong ngày hôm nay
+      const response = await purchaseInvoicesAPI.getAll({ limit: 1000 });
+      const todayInvoices = (response.data?.invoices || []).filter((inv) => {
+        const invDate = new Date(inv.invoice_date).toISOString().split("T")[0];
+        return invDate === today.toISOString().split("T")[0];
+      });
+
+      // Tìm số thứ tự tiếp theo
+      let nextNumber = 1;
+      if (todayInvoices.length > 0) {
+        const numbers = todayInvoices
+          .map((inv) => {
+            const match = inv.invoice_number?.match(
+              new RegExp(`^${prefix}-(\\d+)$`)
+            );
+            return match ? parseInt(match[1]) : 0;
+          })
+          .filter((n) => n > 0);
+        if (numbers.length > 0) {
+          nextNumber = Math.max(...numbers) + 1;
+        }
+      }
+
+      return `${prefix}-${String(nextNumber).padStart(3, "0")}`;
+    } catch (error) {
+      // Fallback nếu có lỗi
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      return `PN${dateStr}-001`;
+    }
+  };
+
+  const handleImageFileChange = (tabIndex, itemIndex, file) => {
+    const newTabs = [...tabs];
+
+    if (!file) {
+      newTabs[tabIndex].data.items[itemIndex].image_url = "";
+      setTabs(newTabs);
+      return;
+    }
+
+    // Resize và compress ảnh trước khi convert sang base64
+    const maxWidth = 800;
+    const maxHeight = 800;
+    const maxSizeKB = 200; // Giới hạn 200KB
+    const quality = 0.7; // Chất lượng JPEG
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Tính toán kích thước mới
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = width * ratio;
+          height = height * ratio;
+        }
+
+        // Tạo canvas để resize
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert sang base64 với chất lượng nén
+        let base64 = canvas.toDataURL("image/jpeg", quality);
+
+        // Nếu vẫn quá lớn, giảm chất lượng thêm
+        while (base64.length > maxSizeKB * 1024 && quality > 0.3) {
+          const newQuality = quality - 0.1;
+          base64 = canvas.toDataURL("image/jpeg", newQuality);
+        }
+
+        const updatedTabs = [...newTabs];
+        updatedTabs[tabIndex].data.items[itemIndex].image_url = base64;
+        setTabs(updatedTabs);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -316,6 +415,38 @@ const PurchaseInvoices = () => {
     }
   };
 
+  const filteredInvoices = invoices.filter((invoice) => {
+    const matchesInvoiceNumber = filters.invoiceNumber
+      ? invoice.invoice_number
+          ?.toLowerCase()
+          .includes(filters.invoiceNumber.toLowerCase())
+      : true;
+
+    const supplierName = invoice.supplier_name || "";
+    const matchesSupplier = filters.supplier
+      ? supplierName.toLowerCase().includes(filters.supplier.toLowerCase())
+      : true;
+
+    const invoiceDate = invoice.invoice_date
+      ? new Date(invoice.invoice_date)
+      : null;
+
+    const matchesDateFrom = filters.dateFrom
+      ? invoiceDate && invoiceDate >= new Date(filters.dateFrom + "T00:00:00")
+      : true;
+
+    const matchesDateTo = filters.dateTo
+      ? invoiceDate && invoiceDate <= new Date(filters.dateTo + "T23:59:59")
+      : true;
+
+    return (
+      matchesInvoiceNumber &&
+      matchesSupplier &&
+      matchesDateFrom &&
+      matchesDateTo
+    );
+  });
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -359,12 +490,13 @@ const PurchaseInvoices = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Hóa đơn nhập hàng</h1>
         <button
-          onClick={() => {
+          onClick={async () => {
+            const invoiceNumber = await generateInvoiceNumber();
             setTabs([
               {
                 label: "Sản phẩm 1",
                 data: {
-                  invoice_number: "",
+                  invoice_number: invoiceNumber,
                   supplier_id: "",
                   invoice_date: new Date().toISOString().split("T")[0],
                   notes: "",
@@ -392,6 +524,91 @@ const PurchaseInvoices = () => {
         </button>
       </div>
 
+      <div className="bg-white rounded-lg shadow p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-gray-800">
+            Bộ lọc hóa đơn nhập hàng
+          </h3>
+          <button
+            className="text-sm text-blue-600 hover:text-blue-800"
+            onClick={() =>
+              setFilters({
+                invoiceNumber: "",
+                supplier: "",
+                dateFrom: "",
+                dateTo: "",
+              })
+            }
+          >
+            Xóa bộ lọc
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">
+              Số hóa đơn
+            </label>
+            <input
+              type="text"
+              value={filters.invoiceNumber}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  invoiceNumber: e.target.value,
+                }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="Tìm theo số hóa đơn"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">
+              Nhà cung cấp
+            </label>
+            <input
+              type="text"
+              value={filters.supplier}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  supplier: e.target.value,
+                }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              placeholder="Tên nhà cung cấp"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Ngày từ</label>
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  dateFrom: e.target.value,
+                }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Ngày đến</label>
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  dateTo: e.target.value,
+                }))
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -406,6 +623,9 @@ const PurchaseInvoices = () => {
                 Ngày
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Ngày cập nhật
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Tổng tiền
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -414,7 +634,7 @@ const PurchaseInvoices = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {invoices.map((invoice) => (
+            {filteredInvoices.map((invoice) => (
               <tr key={invoice.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {invoice.invoice_number}
@@ -424,6 +644,11 @@ const PurchaseInvoices = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(invoice.invoice_date).toLocaleDateString("vi-VN")}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {invoice.updated_at
+                    ? new Date(invoice.updated_at).toLocaleDateString("vi-VN")
+                    : "-"}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {new Intl.NumberFormat("vi-VN").format(invoice.total_cost)} đ
@@ -768,21 +993,33 @@ const PurchaseInvoices = () => {
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">
-                                  URL hình ảnh
+                                  Hình ảnh sản phẩm
                                 </label>
-                                <input
-                                  type="url"
-                                  value={item.image_url || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      tabIndex,
-                                      index,
-                                      "image_url",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                />
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) =>
+                                      handleImageFileChange(
+                                        tabIndex,
+                                        index,
+                                        e.target.files?.[0] || null
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                                  />
+                                  {item.image_url && (
+                                    <img
+                                      src={item.image_url}
+                                      alt="Preview"
+                                      className="w-12 h-12 object-cover rounded border"
+                                    />
+                                  )}
+                                </div>
+                                <p className="mt-1 text-[11px] text-gray-500">
+                                  Ảnh sẽ được lưu dưới dạng dữ liệu base64 trong
+                                  hệ thống.
+                                </p>
                               </div>
                             </>
                           )}

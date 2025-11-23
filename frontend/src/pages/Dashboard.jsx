@@ -61,10 +61,15 @@ const Dashboard = () => {
           salesInvoicesAPI.getAll({ limit: 1000 }),
         ]);
 
-      const allProducts =
-        productsRes.data?.products || productsRes.data || [];
+      const allProducts = productsRes.data?.products || productsRes.data || [];
       const productsArray = Array.isArray(allProducts) ? allProducts : [];
       const lowStock = productsArray.filter((p) => p.stock_quantity < 10) || [];
+
+      // Tính tổng sản phẩm còn tồn kho (chỉ tính những sản phẩm có stock_quantity > 0)
+      const totalProductsInStock = productsArray.reduce((sum, product) => {
+        const stock = Number(product.stock_quantity) || 0;
+        return sum + stock;
+      }, 0);
 
       const suppliersArray = Array.isArray(suppliersRes.data)
         ? suppliersRes.data
@@ -76,15 +81,18 @@ const Dashboard = () => {
         salesInvoicesRes.data?.invoices || salesInvoicesRes.data || [];
 
       const totalRevenue = Array.isArray(salesInvoicesArray)
-        ? salesInvoicesArray.reduce(
-            (sum, invoice) => sum + (invoice.total_revenue || 0),
-            0
-          )
+        ? salesInvoicesArray.reduce((sum, invoice) => {
+            const rawValue =
+              invoice && typeof invoice.total_revenue !== "undefined"
+                ? invoice.total_revenue
+                : 0;
+            const numericValue = Number(rawValue) || 0;
+            return sum + numericValue;
+          }, 0)
         : 0;
 
       setStats({
-        totalProducts:
-          productsRes.data?.totalItems || productsArray.length,
+        totalProducts: totalProductsInStock,
         totalSuppliers: suppliersArray.length,
         totalPurchaseInvoices:
           purchaseInvoicesRes.data?.totalItems || purchaseInvoicesArray.length,
@@ -183,7 +191,7 @@ const Dashboard = () => {
   const statCards = [
     {
       title: "Tổng sản phẩm",
-      value: stats.totalProducts,
+      value: new Intl.NumberFormat("vi-VN").format(stats.totalProducts),
       icon: Package,
       color: "bg-blue-500",
     },
@@ -213,8 +221,7 @@ const Dashboard = () => {
     },
     {
       title: "Doanh thu",
-      value:
-        new Intl.NumberFormat("vi-VN").format(stats.totalRevenue) + " đ",
+      value: new Intl.NumberFormat("vi-VN").format(stats.totalRevenue) + " đ",
       icon: DollarSign,
       color: "bg-indigo-500",
     },

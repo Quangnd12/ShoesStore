@@ -60,6 +60,59 @@ const ProductsEnhanced = () => {
     color: "",
   });
 
+  const handleImageFileChange = (file) => {
+    if (!file) {
+      setFormData((prev) => ({ ...prev, image_url: "" }));
+      return;
+    }
+
+    // Resize và compress ảnh trước khi convert sang base64
+    const maxWidth = 800;
+    const maxHeight = 800;
+    const maxSizeKB = 200; // Giới hạn 200KB
+    const quality = 0.7; // Chất lượng JPEG
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Tính toán kích thước mới
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = width * ratio;
+          height = height * ratio;
+        }
+
+        // Tạo canvas để resize
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert sang base64 với chất lượng nén
+        let base64 = canvas.toDataURL("image/jpeg", quality);
+
+        // Nếu vẫn quá lớn, giảm chất lượng thêm
+        let currentQuality = quality;
+        while (base64.length > maxSizeKB * 1024 && currentQuality > 0.3) {
+          currentQuality -= 0.1;
+          base64 = canvas.toDataURL("image/jpeg", currentQuality);
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          image_url: base64,
+        }));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     fetchProducts();
     fetchCategories();
@@ -114,8 +167,11 @@ const ProductsEnhanced = () => {
   // Group products theo tên để gom các biến thể
   const groupedProducts = useMemo(() => {
     const grouped = {};
+
     allProducts.forEach((product) => {
+      const stockQuantity = product.stock_quantity || 0;
       const key = product.name;
+
       if (!grouped[key]) {
         grouped[key] = {
           name: product.name,
@@ -130,21 +186,33 @@ const ProductsEnhanced = () => {
           image_url: product.image_url,
         };
       }
+
       grouped[key].products.push(product);
-      grouped[key].totalStock += product.stock_quantity || 0;
-      grouped[key].minPrice = Math.min(
-        grouped[key].minPrice,
-        product.price || 0
-      );
-      grouped[key].maxPrice = Math.max(
-        grouped[key].maxPrice,
-        product.price || 0
-      );
-      if (product.size) grouped[key].sizes.add(product.size);
+
+      if (stockQuantity > 0) {
+        grouped[key].totalStock += stockQuantity;
+
+        grouped[key].minPrice = Math.min(
+          grouped[key].minPrice,
+          product.price || 0
+        );
+        grouped[key].maxPrice = Math.max(
+          grouped[key].maxPrice,
+          product.price || 0
+        );
+
+        if (product.size) grouped[key].sizes.add(product.size);
+      }
+
       if (product.color) grouped[key].colors.add(product.color);
       if (product.brand) grouped[key].brands.add(product.brand);
     });
-    return Object.values(grouped);
+
+    const result = Object.values(grouped).filter(
+      (group) => group.totalStock > 0
+    );
+
+    return result;
   }, [allProducts]);
 
   // Lọc theo bộ lọc hiện tại
@@ -794,16 +862,28 @@ const ProductsEnhanced = () => {
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL hình ảnh
+                    Hình ảnh sản phẩm
                   </label>
-                  <input
-                    type="url"
-                    value={formData.image_url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, image_url: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="flex items-center space-x-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleImageFileChange(e.target.files?.[0] || null)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                    {formData.image_url && (
+                      <img
+                        src={formData.image_url}
+                        alt="Preview"
+                        className="w-16 h-16 object-cover rounded border"
+                      />
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Ảnh sẽ được lưu dưới dạng dữ liệu base64 trong hệ thống.
+                  </p>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">

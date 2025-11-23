@@ -80,17 +80,19 @@ const ReturnExchange = {
         // Xử lý theo loại: return hoặc exchange
         if (type === "exchange" && item.new_product_id) {
           // === ĐỔI HÀNG ===
-          
+
           // Kiểm tra sản phẩm mới tồn tại và có đủ tồn kho
           const [newProductRows] = await connection.execute(
             "SELECT id, name, price, size, stock_quantity FROM products WHERE id = ?",
             [item.new_product_id]
           );
           if (!newProductRows.length) {
-            throw new Error(`Không tìm thấy sản phẩm mới ID ${item.new_product_id}`);
+            throw new Error(
+              `Không tìm thấy sản phẩm mới ID ${item.new_product_id}`
+            );
           }
           const newProduct = newProductRows[0];
-          
+
           if (newProduct.stock_quantity < item.quantity) {
             throw new Error(
               `Không đủ tồn kho cho sản phẩm mới "${newProduct.name}" (ID ${item.new_product_id}). Còn lại: ${newProduct.stock_quantity}`
@@ -122,18 +124,23 @@ const ReturnExchange = {
                 item.sales_invoice_item_id,
               ]
             );
-          } 
+          }
           // Nếu đổi một phần → giảm số lượng item cũ, thêm item mới
           else {
             // Giảm số lượng item cũ
             const remainingQuantity = originalItem.quantity - item.quantity;
-            const remainingTotalPrice = originalItem.unit_price * remainingQuantity;
-            
+            const remainingTotalPrice =
+              originalItem.unit_price * remainingQuantity;
+
             await connection.execute(
               `UPDATE sales_invoice_items 
                SET quantity = ?, total_price = ? 
                WHERE id = ?`,
-              [remainingQuantity, remainingTotalPrice, item.sales_invoice_item_id]
+              [
+                remainingQuantity,
+                remainingTotalPrice,
+                item.sales_invoice_item_id,
+              ]
             );
 
             // Thêm item mới cho sản phẩm đổi
@@ -154,32 +161,24 @@ const ReturnExchange = {
 
           // Tính chênh lệch giá để cập nhật tổng doanh thu
           const oldTotalPrice = originalItem.unit_price * item.quantity;
-          totalRevenueDifference += (newTotalPrice - oldTotalPrice);
-        } 
-        else if (type === "return") {
+          totalRevenueDifference += newTotalPrice - oldTotalPrice;
+        } else if (type === "return") {
           // === HOÀN TRẢ ===
-          
-          // Nếu hoàn trả toàn bộ → xóa item
-          if (item.quantity === originalItem.quantity) {
-            await connection.execute(
-              "DELETE FROM sales_invoice_items WHERE id = ?",
-              [item.sales_invoice_item_id]
-            );
-          } 
-          // Nếu hoàn trả một phần → giảm số lượng
-          else {
-            const remainingQuantity = originalItem.quantity - item.quantity;
-            const remainingTotalPrice = originalItem.unit_price * remainingQuantity;
-            
-            await connection.execute(
-              `UPDATE sales_invoice_items 
-               SET quantity = ?, total_price = ? 
-               WHERE id = ?`,
-              [remainingQuantity, remainingTotalPrice, item.sales_invoice_item_id]
-            );
-          }
+          // Không xóa sales_invoice_items vì đang được tham chiếu bởi return_exchange_items (FK),
+          // thay vào đó luôn cập nhật lại số lượng và thành tiền.
 
-          // Trừ doanh thu
+          const remainingQuantity = originalItem.quantity - item.quantity;
+          const remainingTotalPrice =
+            originalItem.unit_price * remainingQuantity;
+
+          await connection.execute(
+            `UPDATE sales_invoice_items 
+             SET quantity = ?, total_price = ? 
+             WHERE id = ?`,
+            [remainingQuantity, remainingTotalPrice, item.sales_invoice_item_id]
+          );
+
+          // Trừ doanh thu theo phần hàng được hoàn trả
           const returnedAmount = originalItem.unit_price * item.quantity;
           totalRevenueDifference -= returnedAmount;
         }
@@ -200,7 +199,10 @@ const ReturnExchange = {
       );
 
       await connection.commit();
-      return { id: returnExchangeId, revenue_difference: totalRevenueDifference };
+      return {
+        id: returnExchangeId,
+        revenue_difference: totalRevenueDifference,
+      };
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -213,7 +215,7 @@ const ReturnExchange = {
   getAll: async (limit, offset) => {
     const limitInt = parseInt(limit) || 10;
     const offsetInt = parseInt(offset) || 0;
-    
+
     const [rows] = await db.query(
       `SELECT re.*, si.invoice_number, si.customer_name, si.customer_phone 
        FROM return_exchanges re 
