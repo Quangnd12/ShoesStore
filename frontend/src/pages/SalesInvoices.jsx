@@ -320,6 +320,26 @@ const SalesInvoices = () => {
     );
   });
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showModal) {
+        setShowModal(false);
+        resetForm();
+      }
+      if (e.key === "Escape" && showDetailModal) {
+        setShowDetailModal(false);
+        setSelectedInvoice(null);
+      }
+      if (e.key === "Escape" && showReturnModal) {
+        setShowReturnModal(false);
+        setSelectedInvoiceForReturn(null);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showModal, showDetailModal, showReturnModal]);
+
   if (loading) {
     return <div className="text-center py-12">Đang tải...</div>;
   }

@@ -25,16 +25,22 @@ const Report = {
       [date]
     );
 
+    const totalRevenue = revenueRows[0]?.total_revenue || 0;
+    const totalInvoices = revenueRows[0]?.invoice_count || 0;
+    const totalCost = costRows[0]?.total_cost || 0;
+
     return {
       date,
-      revenue: revenueRows[0] || { total_revenue: 0, invoice_count: 0 },
-      cost: costRows[0] || { total_cost: 0, invoice_count: 0 },
-      profit: (revenueRows[0]?.total_revenue || 0) - (costRows[0]?.total_cost || 0),
+      total_revenue: totalRevenue,
+      total_invoices: totalInvoices,
+      total_cost: totalCost,
+      profit: totalRevenue - totalCost,
     };
   },
 
   // Báo cáo doanh thu và chi phí theo tuần
   getWeeklyReport: async (year, week) => {
+    // Lấy dữ liệu tổng hợp
     const [revenueRows] = await db.execute(
       `SELECT 
          YEAR(invoice_date) as year,
@@ -59,17 +65,37 @@ const Report = {
       [year, week]
     );
 
+    // Lấy dữ liệu theo từng ngày trong tuần
+    const [dailyData] = await db.execute(
+      `SELECT 
+         DATE(invoice_date) as date,
+         SUM(total_revenue) as total_revenue,
+         COUNT(*) as total_invoices
+       FROM sales_invoices 
+       WHERE YEAR(invoice_date) = ? AND WEEK(invoice_date) = ?
+       GROUP BY DATE(invoice_date)
+       ORDER BY date`,
+      [year, week]
+    );
+
+    const totalRevenue = revenueRows[0]?.total_revenue || 0;
+    const totalInvoices = revenueRows[0]?.invoice_count || 0;
+    const totalCost = costRows[0]?.total_cost || 0;
+
     return {
       year,
       week,
-      revenue: revenueRows[0] || { total_revenue: 0, invoice_count: 0 },
-      cost: costRows[0] || { total_cost: 0, invoice_count: 0 },
-      profit: (revenueRows[0]?.total_revenue || 0) - (costRows[0]?.total_cost || 0),
+      total_revenue: totalRevenue,
+      total_invoices: totalInvoices,
+      total_cost: totalCost,
+      profit: totalRevenue - totalCost,
+      daily_data: dailyData,
     };
   },
 
   // Báo cáo doanh thu và chi phí theo tháng
   getMonthlyReport: async (year, month) => {
+    // Lấy dữ liệu tổng hợp
     const [revenueRows] = await db.execute(
       `SELECT 
          YEAR(invoice_date) as year,
@@ -94,17 +120,37 @@ const Report = {
       [year, month]
     );
 
+    // Lấy dữ liệu theo từng ngày trong tháng
+    const [dailyData] = await db.execute(
+      `SELECT 
+         DATE(invoice_date) as date,
+         SUM(total_revenue) as total_revenue,
+         COUNT(*) as total_invoices
+       FROM sales_invoices 
+       WHERE YEAR(invoice_date) = ? AND MONTH(invoice_date) = ?
+       GROUP BY DATE(invoice_date)
+       ORDER BY date`,
+      [year, month]
+    );
+
+    const totalRevenue = revenueRows[0]?.total_revenue || 0;
+    const totalInvoices = revenueRows[0]?.invoice_count || 0;
+    const totalCost = costRows[0]?.total_cost || 0;
+
     return {
       year,
       month,
-      revenue: revenueRows[0] || { total_revenue: 0, invoice_count: 0 },
-      cost: costRows[0] || { total_cost: 0, invoice_count: 0 },
-      profit: (revenueRows[0]?.total_revenue || 0) - (costRows[0]?.total_cost || 0),
+      total_revenue: totalRevenue,
+      total_invoices: totalInvoices,
+      total_cost: totalCost,
+      profit: totalRevenue - totalCost,
+      daily_data: dailyData,
     };
   },
 
   // Báo cáo doanh thu và chi phí theo năm
   getYearlyReport: async (year) => {
+    // Lấy dữ liệu tổng hợp
     const [revenueRows] = await db.execute(
       `SELECT 
          YEAR(invoice_date) as year,
@@ -127,11 +173,30 @@ const Report = {
       [year]
     );
 
+    // Lấy dữ liệu theo từng tháng trong năm
+    const [monthlyData] = await db.execute(
+      `SELECT 
+         MONTH(invoice_date) as month,
+         SUM(total_revenue) as total_revenue,
+         COUNT(*) as total_invoices
+       FROM sales_invoices 
+       WHERE YEAR(invoice_date) = ?
+       GROUP BY MONTH(invoice_date)
+       ORDER BY month`,
+      [year]
+    );
+
+    const totalRevenue = revenueRows[0]?.total_revenue || 0;
+    const totalInvoices = revenueRows[0]?.invoice_count || 0;
+    const totalCost = costRows[0]?.total_cost || 0;
+
     return {
       year,
-      revenue: revenueRows[0] || { total_revenue: 0, invoice_count: 0 },
-      cost: costRows[0] || { total_cost: 0, invoice_count: 0 },
-      profit: (revenueRows[0]?.total_revenue || 0) - (costRows[0]?.total_cost || 0),
+      total_revenue: totalRevenue,
+      total_invoices: totalInvoices,
+      total_cost: totalCost,
+      profit: totalRevenue - totalCost,
+      monthly_data: monthlyData,
     };
   },
 

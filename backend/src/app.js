@@ -3,7 +3,9 @@ const cors = require("cors");
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+// Tăng giới hạn body size để hỗ trợ upload ảnh base64
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 // Import routes
 const authRoutes = require("./routes/auth");

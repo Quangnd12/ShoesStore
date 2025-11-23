@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { Plus, Edit, Trash2, Filter, X } from "lucide-react";
 import { suppliersAPI } from "../services/api";
 import { useToast } from "../contexts/ToastContext";
+import { useFormDirty } from "../hooks/useFormDirty";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const Suppliers = () => {
   const { showToast } = useToast();
@@ -22,6 +24,18 @@ const Suppliers = () => {
     email: "",
     address: "",
   });
+
+  const initialFormData = {
+    name: "",
+    contact_person: "",
+    phone: "",
+    email: "",
+    address: "",
+  };
+
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const isDirty = useFormDirty(formData, editingSupplier || initialFormData);
 
   useEffect(() => {
     fetchSuppliers();
@@ -92,6 +106,34 @@ const Suppliers = () => {
     });
   };
 
+  const handleCloseModal = () => {
+    if (isDirty) {
+      setPendingAction(() => () => {
+        setShowModal(false);
+        setEditingSupplier(null);
+        resetForm();
+      });
+      setShowConfirmDialog(true);
+    } else {
+      setShowModal(false);
+      setEditingSupplier(null);
+      resetForm();
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowConfirmDialog(false);
+    if (pendingAction) {
+      pendingAction();
+      setPendingAction(null);
+    }
+  };
+
+  const handleCancelClose = () => {
+    setShowConfirmDialog(false);
+    setPendingAction(null);
+  };
+
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((supplier) => {
       const matchesName = filters.name
@@ -127,6 +169,17 @@ const Suppliers = () => {
       email: "",
     });
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showModal && !showConfirmDialog) {
+        handleCloseModal();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showModal, showConfirmDialog, isDirty]);
 
   if (loading) {
     return <div className="text-center py-12">Đang tải...</div>;
@@ -283,13 +336,28 @@ const Suppliers = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCloseModal();
+            }
+          }}
+        >
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-            <h2 className="text-2xl font-bold mb-4">
-              {editingSupplier
-                ? "Chỉnh sửa nhà cung cấp"
-                : "Thêm nhà cung cấp mới"}
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">
+                {editingSupplier
+                  ? "Chỉnh sửa nhà cung cấp"
+                  : "Thêm nhà cung cấp mới"}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -365,11 +433,7 @@ const Suppliers = () => {
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditingSupplier(null);
-                    resetForm();
-                  }}
+                  onClick={handleCloseModal}
                   className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                 >
                   Hủy
@@ -385,6 +449,17 @@ const Suppliers = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        show={showConfirmDialog}
+        title="Xác nhận thoát"
+        message="Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?"
+        confirmText="Thoát"
+        cancelText="Tiếp tục chỉnh sửa"
+        confirmColor="red"
+        onConfirm={handleConfirmClose}
+        onCancel={handleCancelClose}
+      />
     </div>
   );
 };

@@ -8,6 +8,7 @@ import {
 } from "../services/api";
 import { useToast } from "../contexts/ToastContext";
 import DynamicTabs from "../components/DynamicTabs";
+import SizeGenerator from "../components/SizeGenerator";
 
 const PurchaseInvoices = () => {
   const { showToast } = useToast();
@@ -1039,6 +1040,23 @@ const PurchaseInvoices = () => {
                               + Thêm size
                             </button>
                           </div>
+
+                          {/* Size Generator */}
+                          <SizeGenerator
+                            onGenerate={(sizes) => {
+                              const newTabs = [...tabs];
+                              const currentUnitCost =
+                                item.variants[0]?.unit_cost || "";
+                              const newVariants = sizes.map((size) => ({
+                                size: size,
+                                quantity: "",
+                                unit_cost: currentUnitCost,
+                              }));
+                              newTabs[tabIndex].data.items[index].variants =
+                                newVariants;
+                              setTabs(newTabs);
+                            }}
+                          />
                           {item.variants &&
                             item.variants.map((variant, variantIndex) => (
                               <div
