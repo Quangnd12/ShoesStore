@@ -59,6 +59,7 @@ export const purchaseInvoicesAPI = {
   getById: (id) => api.get(`/purchase-invoices/${id}`),
   create: (data) => api.post("/purchase-invoices", data),
   delete: (id) => api.delete(`/purchase-invoices/${id}`),
+  getNextInvoiceNumber: () => api.get("/purchase-invoices/next-number"),
 };
 
 // Sales Invoices API
@@ -66,6 +67,7 @@ export const salesInvoicesAPI = {
   getAll: (params) => api.get("/sales-invoices", { params }),
   getById: (id) => api.get(`/sales-invoices/${id}`),
   create: (data) => api.post("/sales-invoices", data),
+  getNextInvoiceNumber: () => api.get("/sales-invoices/next-number"),
 };
 
 // Return / Exchange API

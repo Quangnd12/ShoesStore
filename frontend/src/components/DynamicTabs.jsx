@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Plus } from "lucide-react";
 
 const DynamicTabs = ({ tabs, onTabChange, onTabClose, onAddTab, renderTabContent }) => {
   const [activeTab, setActiveTab] = useState(0);
+
+  // Ensure activeTab is within bounds
+  useEffect(() => {
+    if (activeTab >= tabs.length && tabs.length > 0) {
+      setActiveTab(tabs.length - 1);
+    }
+  }, [tabs.length, activeTab]);
 
   const handleTabClick = (index) => {
     setActiveTab(index);
@@ -20,9 +27,9 @@ const DynamicTabs = ({ tabs, onTabChange, onTabClose, onAddTab, renderTabContent
   };
 
   const handleAddTab = () => {
-    const newIndex = tabs.length;
     onAddTab();
-    setActiveTab(newIndex);
+    // Don't automatically switch to new tab - let user click on it
+    // This prevents race conditions with state updates
   };
 
   return (
@@ -57,7 +64,15 @@ const DynamicTabs = ({ tabs, onTabChange, onTabClose, onAddTab, renderTabContent
           <span className="text-sm">Thêm</span>
         </button>
       </div>
-      <div>{renderTabContent(tabs[activeTab], activeTab)}</div>
+      <div>
+        {tabs[activeTab] ? (
+          renderTabContent(tabs[activeTab], activeTab)
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            Đang tải...
+          </div>
+        )}
+      </div>
     </div>
   );
 };

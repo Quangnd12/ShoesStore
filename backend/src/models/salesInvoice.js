@@ -213,6 +213,40 @@ const SalesInvoice = {
     );
     return rows;
   },
+
+  // Lấy số hóa đơn tiếp theo (tự động tăng)
+  getNextInvoiceNumber: async () => {
+    try {
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      const prefix = `HD${dateStr}`;
+
+      // Lấy hóa đơn cuối cùng trong ngày hôm nay
+      const [rows] = await db.execute(
+        `SELECT invoice_number 
+         FROM sales_invoices 
+         WHERE invoice_number LIKE ? 
+         ORDER BY invoice_number DESC 
+         LIMIT 1`,
+        [`${prefix}-%`]
+      );
+
+      let nextNumber = 1;
+      if (rows.length > 0) {
+        const match = rows[0].invoice_number.match(/(\d+)$/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+
+      return `${prefix}-${String(nextNumber).padStart(3, "0")}`;
+    } catch (error) {
+      // Fallback nếu có lỗi
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      return `HD${dateStr}-001`;
+    }
+  },
 };
 
 module.exports = SalesInvoice;

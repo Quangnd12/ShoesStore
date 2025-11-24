@@ -115,3 +115,13 @@ exports.deletePurchaseInvoice = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Lấy số hóa đơn tiếp theo (tự động tăng)
+exports.getNextInvoiceNumber = async (req, res) => {
+  try {
+    const nextNumber = await PurchaseInvoice.getNextInvoiceNumber();
+    res.json({ invoice_number: nextNumber });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

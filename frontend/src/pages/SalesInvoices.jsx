@@ -1,11 +1,14 @@
-import { useState, useEffect } from "react";
-import { Plus, Eye, Edit } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Eye, Edit, X } from "lucide-react";
 import {
   salesInvoicesAPI,
   productsAPI,
   returnExchangesAPI,
 } from "../services/api";
 import { useToast } from "../contexts/ToastContext";
+import DynamicTabs from "../components/DynamicTabs";
+import { useFormDirty } from "../hooks/useFormDirty";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const SalesInvoices = () => {
   const { showToast } = useToast();
@@ -18,7 +21,29 @@ const SalesInvoices = () => {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] =
     useState(null);
-  const [formData, setFormData] = useState({
+  
+  // Multi-tab structure
+  const [tabs, setTabs] = useState([
+    {
+      label: "Hóa đơn 1",
+      data: {
+        invoice_number: "",
+        invoice_date: new Date().toISOString().split("T")[0],
+        customer_name: "",
+        customer_phone: "",
+        customer_email: "",
+        notes: "",
+        items: [{ product_id: "", quantity: "", unit_price: "" }],
+      },
+    },
+  ]);
+
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  
+  // Check if current tab has changes
+  const initialTabData = useMemo(() => ({
     invoice_number: "",
     invoice_date: new Date().toISOString().split("T")[0],
     customer_name: "",
@@ -26,7 +51,13 @@ const SalesInvoices = () => {
     customer_email: "",
     notes: "",
     items: [{ product_id: "", quantity: "", unit_price: "" }],
-  });
+  }), []);
+
+  const currentTabData = useMemo(() => {
+    return tabs[activeTabIndex]?.data || initialTabData;
+  }, [tabs, activeTabIndex, initialTabData]);
+
+  const isDirty = useFormDirty(currentTabData, initialTabData);
 
   const [returnForm, setReturnForm] = useState({
     type: "return",
@@ -48,16 +79,31 @@ const SalesInvoices = () => {
     dateTo: "",
   });
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+
   useEffect(() => {
-    fetchInvoices();
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    fetchInvoices();
+  }, [currentPage, itemsPerPage]);
+
   const fetchInvoices = async () => {
     try {
-      const response = await salesInvoicesAPI.getAll({ limit: 100 });
-      // API trả về { invoices: [...], ... } trong response.data
-      setInvoices(response.data?.invoices || []);
+      const response = await salesInvoicesAPI.getAll({ 
+        page: currentPage,
+        limit: itemsPerPage 
+      });
+      // API trả về { invoices: [...], totalItems, totalPages, ... }
+      const invoicesData = response.data?.invoices || [];
+      const total = response.data?.totalItems || invoicesData.length;
+      
+      setInvoices(invoicesData);
+      setTotalPages(response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1);
     } catch (error) {
       console.error("Error fetching invoices:", error);
       showToast("Không thể tải danh sách hóa đơn bán", "error");
@@ -88,62 +134,160 @@ const SalesInvoices = () => {
     }
   };
 
-  const handleAddItem = () => {
-    setFormData({
-      ...formData,
-      items: [
-        ...formData.items,
-        { product_id: "", quantity: "", unit_price: "" },
-      ],
-    });
+  const handleAddTab = async () => {
+    try {
+      // Gọi API để lấy số hóa đơn tiếp theo từ backend
+      const response = await salesInvoicesAPI.getNextInvoiceNumber();
+      const newInvoiceNumber = response.data.invoice_number;
+      
+      setTabs([
+        ...tabs,
+        {
+          label: `Hóa đơn ${tabs.length + 1}`,
+          data: {
+            invoice_number: newInvoiceNumber,
+            invoice_date: new Date().toISOString().split("T")[0],
+            customer_name: "",
+            customer_phone: "",
+            customer_email: "",
+            notes: "",
+            items: [{ product_id: "", quantity: "", unit_price: "" }],
+          },
+        },
+      ]);
+    } catch (error) {
+      // Fallback nếu API lỗi - tăng số thủ công
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      const lastTab = tabs[tabs.length - 1];
+      let nextNum = 1;
+      
+      if (lastTab?.data?.invoice_number) {
+        const match = lastTab.data.invoice_number.match(/(\d+)$/);
+        if (match) {
+          nextNum = parseInt(match[1]) + 1;
+        }
+      }
+      
+      const fallbackNumber = `HD${dateStr}-${String(nextNum).padStart(3, "0")}`;
+      
+      setTabs([
+        ...tabs,
+        {
+          label: `Hóa đơn ${tabs.length + 1}`,
+          data: {
+            invoice_number: fallbackNumber,
+            invoice_date: new Date().toISOString().split("T")[0],
+            customer_name: "",
+            customer_phone: "",
+            customer_email: "",
+            notes: "",
+            items: [{ product_id: "", quantity: "", unit_price: "" }],
+          },
+        },
+      ]);
+    }
   };
 
-  const handleRemoveItem = (index) => {
-    setFormData({
-      ...formData,
-      items: formData.items.filter((_, i) => i !== index),
-    });
+  const handleTabClose = (index) => {
+    if (tabs.length > 1) {
+      const newTabs = tabs.filter((_, i) => i !== index);
+      setTabs(newTabs);
+      // Adjust activeTabIndex if needed
+      if (activeTabIndex >= newTabs.length) {
+        setActiveTabIndex(Math.max(0, newTabs.length - 1));
+      } else if (activeTabIndex > index) {
+        setActiveTabIndex(activeTabIndex - 1);
+      }
+    }
   };
 
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
+  const handleTabChange = (index) => {
+    setActiveTabIndex(index);
+  };
+
+  const handleAddItem = (tabIndex) => {
+    const newTabs = [...tabs];
+    newTabs[tabIndex].data.items.push({
+      product_id: "",
+      quantity: "",
+      unit_price: "",
+    });
+    setTabs(newTabs);
+  };
+
+  const handleRemoveItem = (tabIndex, itemIndex) => {
+    const newTabs = [...tabs];
+    if (newTabs[tabIndex].data.items.length > 1) {
+      newTabs[tabIndex].data.items = newTabs[tabIndex].data.items.filter(
+        (_, i) => i !== itemIndex
+      );
+      setTabs(newTabs);
+    }
+  };
+
+  const handleItemChange = (tabIndex, itemIndex, field, value) => {
+    const newTabs = [...tabs];
+    newTabs[tabIndex].data.items[itemIndex][field] = value;
 
     // Auto-fill unit_price from product if not set
     if (field === "product_id" && value) {
       const product = products.find((p) => p.id === parseInt(value));
-      if (product && !newItems[index].unit_price) {
-        newItems[index].unit_price = product.price;
+      if (product && !newTabs[tabIndex].data.items[itemIndex].unit_price) {
+        newTabs[tabIndex].data.items[itemIndex].unit_price = product.price;
       }
     }
 
-    setFormData({ ...formData, items: newItems });
+    setTabs(newTabs);
   };
 
-  const handleSubmit = async (e) => {
+  const handleTabDataChange = (tabIndex, field, value) => {
+    const newTabs = [...tabs];
+    newTabs[tabIndex].data[field] = value;
+    setTabs(newTabs);
+  };
+
+  const handleSubmit = async (e, tabIndex) => {
     e.preventDefault();
     try {
-      const items = formData.items.map((item) => ({
+      const tabData = tabs[tabIndex].data;
+      const items = tabData.items.map((item) => ({
         product_id: parseInt(item.product_id),
         quantity: parseInt(item.quantity),
         unit_price: item.unit_price ? parseFloat(item.unit_price) : undefined,
       }));
 
       await salesInvoicesAPI.create({
-        invoice_number: formData.invoice_number,
-        invoice_date: formData.invoice_date,
-        customer_name: formData.customer_name || null,
-        customer_phone: formData.customer_phone || null,
-        customer_email: formData.customer_email || null,
-        notes: formData.notes || null,
+        invoice_number: tabData.invoice_number,
+        invoice_date: tabData.invoice_date,
+        customer_name: tabData.customer_name || null,
+        customer_phone: tabData.customer_phone || null,
+        customer_email: tabData.customer_email || null,
+        notes: tabData.notes || null,
         items,
       });
 
-      setShowModal(false);
-      await resetForm();
+      showToast("Tạo hóa đơn bán hàng thành công!", "success");
+      
+      // Remove submitted tab
+      const newTabs = tabs.filter((_, i) => i !== tabIndex);
+      if (newTabs.length === 0) {
+        setShowModal(false);
+        resetAllTabs();
+      } else {
+        setTabs(newTabs);
+        // Adjust activeTabIndex
+        if (activeTabIndex === tabIndex) {
+          // If we closed the active tab, move to previous or first tab
+          setActiveTabIndex(Math.max(0, tabIndex - 1));
+        } else if (activeTabIndex > tabIndex) {
+          // If we closed a tab before the active one, shift index down
+          setActiveTabIndex(activeTabIndex - 1);
+        }
+      }
+      
       await fetchInvoices();
       await fetchProducts();
-      showToast("Tạo hóa đơn bán hàng thành công!", "success");
     } catch (error) {
       showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
     }
@@ -274,17 +418,75 @@ const SalesInvoices = () => {
     }
   };
 
-  const resetForm = async () => {
-    const invoiceNumber = await generateInvoiceNumber();
-    setFormData({
-      invoice_number: invoiceNumber,
-      invoice_date: new Date().toISOString().split("T")[0],
-      customer_name: "",
-      customer_phone: "",
-      customer_email: "",
-      notes: "",
-      items: [{ product_id: "", quantity: "", unit_price: "" }],
-    });
+  const resetAllTabs = async () => {
+    try {
+      // Gọi API để lấy số hóa đơn tiếp theo từ backend
+      const response = await salesInvoicesAPI.getNextInvoiceNumber();
+      const invoiceNumber = response.data.invoice_number;
+      
+      setTabs([
+        {
+          label: "Hóa đơn 1",
+          data: {
+            invoice_number: invoiceNumber,
+            invoice_date: new Date().toISOString().split("T")[0],
+            customer_name: "",
+            customer_phone: "",
+            customer_email: "",
+            notes: "",
+            items: [{ product_id: "", quantity: "", unit_price: "" }],
+          },
+        },
+      ]);
+      setActiveTabIndex(0);
+    } catch (error) {
+      // Fallback nếu API lỗi
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      const fallbackNumber = `HD${dateStr}-001`;
+      
+      setTabs([
+        {
+          label: "Hóa đơn 1",
+          data: {
+            invoice_number: fallbackNumber,
+            invoice_date: new Date().toISOString().split("T")[0],
+            customer_name: "",
+            customer_phone: "",
+            customer_email: "",
+            notes: "",
+            items: [{ product_id: "", quantity: "", unit_price: "" }],
+          },
+        },
+      ]);
+      setActiveTabIndex(0);
+    }
+  };
+
+  const handleCloseModal = () => {
+    if (isDirty) {
+      setPendingAction(() => () => {
+        setShowModal(false);
+        resetAllTabs();
+      });
+      setShowConfirmDialog(true);
+    } else {
+      setShowModal(false);
+      resetAllTabs();
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowConfirmDialog(false);
+    if (pendingAction) {
+      pendingAction();
+      setPendingAction(null);
+    }
+  };
+
+  const handleCancelClose = () => {
+    setShowConfirmDialog(false);
+    setPendingAction(null);
   };
 
   const filteredInvoices = invoices.filter((invoice) => {
@@ -323,9 +525,8 @@ const SalesInvoices = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape" && showModal) {
-        setShowModal(false);
-        resetForm();
+      if (e.key === "Escape" && showModal && !showConfirmDialog) {
+        handleCloseModal();
       }
       if (e.key === "Escape" && showDetailModal) {
         setShowDetailModal(false);
@@ -338,7 +539,7 @@ const SalesInvoices = () => {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showModal, showDetailModal, showReturnModal]);
+  }, [showModal, showDetailModal, showReturnModal, showConfirmDialog, isDirty]);
 
   if (loading) {
     return <div className="text-center py-12">Đang tải...</div>;
@@ -349,8 +550,8 @@ const SalesInvoices = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Hóa đơn bán hàng</h1>
         <button
-          onClick={async () => {
-            await resetForm();
+          onClick={() => {
+            resetAllTabs();
             setShowModal(true);
           }}
           className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -514,11 +715,113 @@ const SalesInvoices = () => {
         </table>
       </div>
 
+      {/* Pagination */}
+      <div className="mt-4 flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-700">
+            Hiển thị{" "}
+            <span className="font-medium">
+              {Math.min((currentPage - 1) * itemsPerPage + 1, filteredInvoices.length)}
+            </span>{" "}
+            -{" "}
+            <span className="font-medium">
+              {Math.min(currentPage * itemsPerPage, filteredInvoices.length)}
+            </span>{" "}
+            trong tổng số{" "}
+            <span className="font-medium">{filteredInvoices.length}</span> hóa đơn
+          </span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(parseInt(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="ml-2 border border-gray-300 rounded px-2 py-1 text-sm"
+          >
+            <option value={5}>5 / trang</option>
+            <option value={10}>10 / trang</option>
+            <option value={20}>20 / trang</option>
+            <option value={50}>50 / trang</option>
+          </select>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang đầu"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang trước"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span className="px-4 py-2 text-sm">
+            Trang <span className="font-medium">{currentPage}</span> /{" "}
+            <span className="font-medium">{totalPages}</span>
+          </span>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage >= totalPages}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang sau"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage >= totalPages}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang cuối"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-4">Thêm hóa đơn bán hàng</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCloseModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Thêm hóa đơn bán hàng</h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <DynamicTabs
+              tabs={tabs}
+              onTabChange={handleTabChange}
+              onTabClose={handleTabClose}
+              onAddTab={handleAddTab}
+              renderTabContent={(tab, tabIndex) => (
+                <form
+                  onSubmit={(e) => handleSubmit(e, tabIndex)}
+                  className="space-y-4"
+                >
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -527,12 +830,13 @@ const SalesInvoices = () => {
                   <input
                     type="text"
                     required
-                    value={formData.invoice_number}
+                    value={tab.data.invoice_number}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        invoice_number: e.target.value,
-                      })
+                      handleTabDataChange(
+                        tabIndex,
+                        "invoice_number",
+                        e.target.value
+                      )
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
@@ -544,9 +848,9 @@ const SalesInvoices = () => {
                   <input
                     type="date"
                     required
-                    value={formData.invoice_date}
+                    value={tab.data.invoice_date}
                     onChange={(e) =>
-                      setFormData({ ...formData, invoice_date: e.target.value })
+                      handleTabDataChange(tabIndex, "invoice_date", e.target.value)
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
@@ -557,12 +861,9 @@ const SalesInvoices = () => {
                   </label>
                   <input
                     type="text"
-                    value={formData.customer_name}
+                    value={tab.data.customer_name}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        customer_name: e.target.value,
-                      })
+                      handleTabDataChange(tabIndex, "customer_name", e.target.value)
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
@@ -573,12 +874,9 @@ const SalesInvoices = () => {
                   </label>
                   <input
                     type="tel"
-                    value={formData.customer_phone}
+                    value={tab.data.customer_phone}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        customer_phone: e.target.value,
-                      })
+                      handleTabDataChange(tabIndex, "customer_phone", e.target.value)
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
@@ -589,12 +887,9 @@ const SalesInvoices = () => {
                   </label>
                   <input
                     type="email"
-                    value={formData.customer_email}
+                    value={tab.data.customer_email}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        customer_email: e.target.value,
-                      })
+                      handleTabDataChange(tabIndex, "customer_email", e.target.value)
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
@@ -606,9 +901,9 @@ const SalesInvoices = () => {
                   Ghi chú
                 </label>
                 <textarea
-                  value={formData.notes}
+                  value={tab.data.notes}
                   onChange={(e) =>
-                    setFormData({ ...formData, notes: e.target.value })
+                    handleTabDataChange(tabIndex, "notes", e.target.value)
                   }
                   rows="2"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -622,13 +917,13 @@ const SalesInvoices = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={handleAddItem}
+                    onClick={() => handleAddItem(tabIndex)}
                     className="text-blue-600 hover:text-blue-800 text-sm"
                   >
                     + Thêm sản phẩm
                   </button>
                 </div>
-                {formData.items.map((item, index) => {
+                {tab.data.items.map((item, index) => {
                   const selectedProduct = Array.isArray(products)
                     ? products.find((p) => p.id === parseInt(item.product_id))
                     : null;
@@ -641,10 +936,10 @@ const SalesInvoices = () => {
                         <span className="text-sm font-medium text-gray-700">
                           Sản phẩm {index + 1}
                         </span>
-                        {formData.items.length > 1 && (
+                        {tab.data.items.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => handleRemoveItem(index)}
+                            onClick={() => handleRemoveItem(tabIndex, index)}
                             className="text-red-600 hover:text-red-800 text-sm"
                           >
                             Xóa
@@ -661,6 +956,7 @@ const SalesInvoices = () => {
                             value={item.product_id}
                             onChange={(e) =>
                               handleItemChange(
+                                tabIndex,
                                 index,
                                 "product_id",
                                 e.target.value
@@ -693,6 +989,7 @@ const SalesInvoices = () => {
                             value={item.quantity}
                             onChange={(e) =>
                               handleItemChange(
+                                tabIndex,
                                 index,
                                 "quantity",
                                 e.target.value
@@ -717,6 +1014,7 @@ const SalesInvoices = () => {
                             value={item.unit_price}
                             onChange={(e) =>
                               handleItemChange(
+                                tabIndex,
                                 index,
                                 "unit_price",
                                 e.target.value
@@ -732,28 +1030,38 @@ const SalesInvoices = () => {
                 })}
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setShowModal(false);
-                    await resetForm();
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Tạo hóa đơn
-                </button>
-              </div>
-            </form>
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleCloseModal}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Tạo hóa đơn
+                    </button>
+                  </div>
+                </form>
+              )}
+            />
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        show={showConfirmDialog}
+        title="Xác nhận thoát"
+        message="Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?"
+        confirmText="Thoát"
+        cancelText="Tiếp tục chỉnh sửa"
+        confirmColor="red"
+        onConfirm={handleConfirmClose}
+        onCancel={handleCancelClose}
+      />
 
       {showReturnModal && selectedInvoiceForReturn && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1007,6 +1315,16 @@ const SalesInvoices = () => {
                   </p>
                 </div>
               </div>
+
+              {selectedInvoice.notes && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-gray-600 font-medium mb-1">
+                    Ghi chú
+                  </p>
+                  <p className="text-gray-800">{selectedInvoice.notes}</p>
+                </div>
+              )}
+
               {selectedInvoice.items && selectedInvoice.items.length > 0 && (
                 <div>
                   <h3 className="font-medium mb-2">Chi tiết sản phẩm</h3>

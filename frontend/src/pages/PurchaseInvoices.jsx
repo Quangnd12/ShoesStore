@@ -9,6 +9,8 @@ import {
 import { useToast } from "../contexts/ToastContext";
 import DynamicTabs from "../components/DynamicTabs";
 import SizeGenerator from "../components/SizeGenerator";
+import { useFormDirty } from "../hooks/useFormDirty";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const PurchaseInvoices = () => {
   const { showToast } = useToast();
@@ -51,12 +53,48 @@ const PurchaseInvoices = () => {
     dateTo: "",
   });
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+
+  // Check if current tab has changes
+  const initialTabData = {
+    invoice_number: "",
+    supplier_id: "",
+    invoice_date: new Date().toISOString().split("T")[0],
+    notes: "",
+    items: [
+      {
+        product_id: "",
+        name: "",
+        price: "",
+        category_id: "",
+        image_url: "",
+        brand: "",
+        color: "",
+        variants: [{ size: "", quantity: "", unit_cost: "" }],
+      },
+    ],
+  };
+  const isDirty = useFormDirty(
+    tabs[activeTabIndex]?.data || initialTabData,
+    initialTabData
+  );
+
   useEffect(() => {
-    fetchInvoices();
     fetchSuppliers();
     fetchProducts();
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [currentPage, itemsPerPage]);
 
   const generateInvoiceNumber = async () => {
     try {
@@ -152,9 +190,16 @@ const PurchaseInvoices = () => {
 
   const fetchInvoices = async () => {
     try {
-      const response = await purchaseInvoicesAPI.getAll({ limit: 100 });
-      // API trả về { invoices: [...], ... } trong response.data
-      setInvoices(response.data?.invoices || []);
+      const response = await purchaseInvoicesAPI.getAll({ 
+        page: currentPage,
+        limit: itemsPerPage 
+      });
+      // API trả về { invoices: [...], totalItems, totalPages, ... }
+      const invoicesData = response.data?.invoices || [];
+      const total = response.data?.totalItems || invoicesData.length;
+      
+      setInvoices(invoicesData);
+      setTotalPages(response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1);
     } catch (error) {
       console.error("Error fetching invoices:", error);
       showToast("Không thể tải danh sách hóa đơn nhập", "error");
@@ -207,31 +252,77 @@ const PurchaseInvoices = () => {
     }
   };
 
-  const handleAddTab = () => {
-    setTabs([
-      ...tabs,
-      {
-        label: `Sản phẩm ${tabs.length + 1}`,
-        data: {
-          invoice_number: "",
-          supplier_id: "",
-          invoice_date: new Date().toISOString().split("T")[0],
-          notes: "",
-          items: [
-            {
-              product_id: "",
-              name: "",
-              price: "",
-              category_id: "",
-              image_url: "",
-              brand: "",
-              color: "",
-              variants: [{ size: "", quantity: "", unit_cost: "" }],
-            },
-          ],
+  const handleAddTab = async () => {
+    try {
+      // Gọi API để lấy số hóa đơn tiếp theo từ backend
+      const response = await purchaseInvoicesAPI.getNextInvoiceNumber();
+      const newInvoiceNumber = response.data.invoice_number;
+      
+      setTabs([
+        ...tabs,
+        {
+          label: `Sản phẩm ${tabs.length + 1}`,
+          data: {
+            invoice_number: newInvoiceNumber,
+            supplier_id: "",
+            invoice_date: new Date().toISOString().split("T")[0],
+            notes: "",
+            items: [
+              {
+                product_id: "",
+                name: "",
+                price: "",
+                category_id: "",
+                image_url: "",
+                brand: "",
+                color: "",
+                variants: [{ size: "", quantity: "", unit_cost: "" }],
+              },
+            ],
+          },
         },
-      },
-    ]);
+      ]);
+    } catch (error) {
+      // Fallback nếu API lỗi
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      const lastTab = tabs[tabs.length - 1];
+      let nextNum = 1;
+      
+      if (lastTab?.data?.invoice_number) {
+        const match = lastTab.data.invoice_number.match(/(\d+)$/);
+        if (match) {
+          nextNum = parseInt(match[1]) + 1;
+        }
+      }
+      
+      const fallbackNumber = `PN${dateStr}-${String(nextNum).padStart(3, "0")}`;
+      
+      setTabs([
+        ...tabs,
+        {
+          label: `Sản phẩm ${tabs.length + 1}`,
+          data: {
+            invoice_number: fallbackNumber,
+            supplier_id: "",
+            invoice_date: new Date().toISOString().split("T")[0],
+            notes: "",
+            items: [
+              {
+                product_id: "",
+                name: "",
+                price: "",
+                category_id: "",
+                image_url: "",
+                brand: "",
+                color: "",
+                variants: [{ size: "", quantity: "", unit_cost: "" }],
+              },
+            ],
+          },
+        },
+      ]);
+    }
   };
 
   const handleTabClose = (index) => {
@@ -241,7 +332,7 @@ const PurchaseInvoices = () => {
   };
 
   const handleTabChange = (index) => {
-    // Tab changed
+    setActiveTabIndex(index);
   };
 
   const handleAddItem = (tabIndex) => {
@@ -448,39 +539,105 @@ const PurchaseInvoices = () => {
     );
   });
 
+  const handleCloseModal = () => {
+    if (isDirty) {
+      setPendingAction(() => () => {
+        setShowModal(false);
+        resetAllTabs();
+      });
+      setShowConfirmDialog(true);
+    } else {
+      setShowModal(false);
+      resetAllTabs();
+    }
+  };
+
+  const handleConfirmClose = () => {
+    setShowConfirmDialog(false);
+    if (pendingAction) {
+      pendingAction();
+      setPendingAction(null);
+    }
+  };
+
+  const handleCancelClose = () => {
+    setShowConfirmDialog(false);
+    setPendingAction(null);
+  };
+
+  const resetAllTabs = async () => {
+    try {
+      // Gọi API để lấy số hóa đơn tiếp theo từ backend
+      const response = await purchaseInvoicesAPI.getNextInvoiceNumber();
+      const invoiceNumber = response.data.invoice_number;
+      
+      setTabs([
+        {
+          label: "Sản phẩm 1",
+          data: {
+            invoice_number: invoiceNumber,
+            supplier_id: "",
+            invoice_date: new Date().toISOString().split("T")[0],
+            notes: "",
+            items: [
+              {
+                product_id: "",
+                name: "",
+                price: "",
+                category_id: "",
+                image_url: "",
+                brand: "",
+                color: "",
+                variants: [{ size: "", quantity: "", unit_cost: "" }],
+              },
+            ],
+          },
+        },
+      ]);
+      setActiveTabIndex(0);
+    } catch (error) {
+      // Fallback nếu API lỗi
+      const today = new Date();
+      const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
+      const fallbackNumber = `PN${dateStr}-001`;
+      
+      setTabs([
+        {
+          label: "Sản phẩm 1",
+          data: {
+            invoice_number: fallbackNumber,
+            supplier_id: "",
+            invoice_date: new Date().toISOString().split("T")[0],
+            notes: "",
+            items: [
+              {
+                product_id: "",
+                name: "",
+                price: "",
+                category_id: "",
+                image_url: "",
+                brand: "",
+                color: "",
+                variants: [{ size: "", quantity: "", unit_cost: "" }],
+              },
+            ],
+          },
+        },
+      ]);
+      setActiveTabIndex(0);
+    }
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === "Escape" && showModal) {
-        setShowModal(false);
-        setTabs([
-          {
-            label: "Sản phẩm 1",
-            data: {
-              invoice_number: "",
-              supplier_id: "",
-              invoice_date: new Date().toISOString().split("T")[0],
-              notes: "",
-              items: [
-                {
-                  product_id: "",
-                  name: "",
-                  price: "",
-                  category_id: "",
-                  image_url: "",
-                  brand: "",
-                  color: "",
-                  variants: [{ size: "", quantity: "", unit_cost: "" }],
-                },
-              ],
-            },
-          },
-        ]);
+      if (e.key === "Escape" && showModal && !showConfirmDialog) {
+        handleCloseModal();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [showModal]);
+  }, [showModal, showConfirmDialog, isDirty]);
 
   if (loading) {
     return <div className="text-center py-12">Đang tải...</div>;
@@ -492,30 +649,7 @@ const PurchaseInvoices = () => {
         <h1 className="text-3xl font-bold text-gray-800">Hóa đơn nhập hàng</h1>
         <button
           onClick={async () => {
-            const invoiceNumber = await generateInvoiceNumber();
-            setTabs([
-              {
-                label: "Sản phẩm 1",
-                data: {
-                  invoice_number: invoiceNumber,
-                  supplier_id: "",
-                  invoice_date: new Date().toISOString().split("T")[0],
-                  notes: "",
-                  items: [
-                    {
-                      product_id: "",
-                      name: "",
-                      price: "",
-                      category_id: "",
-                      image_url: "",
-                      brand: "",
-                      color: "",
-                      variants: [{ size: "", quantity: "", unit_cost: "" }],
-                    },
-                  ],
-                },
-              },
-            ]);
+            await resetAllTabs();
             setShowModal(true);
           }}
           className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
@@ -674,35 +808,89 @@ const PurchaseInvoices = () => {
         </table>
       </div>
 
+      {/* Pagination */}
+      <div className="mt-4 flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-gray-700">
+            Hiển thị{" "}
+            <span className="font-medium">
+              {Math.min((currentPage - 1) * itemsPerPage + 1, filteredInvoices.length)}
+            </span>{" "}
+            -{" "}
+            <span className="font-medium">
+              {Math.min(currentPage * itemsPerPage, filteredInvoices.length)}
+            </span>{" "}
+            trong tổng số{" "}
+            <span className="font-medium">{filteredInvoices.length}</span> hóa đơn
+          </span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(parseInt(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="ml-2 border border-gray-300 rounded px-2 py-1 text-sm"
+          >
+            <option value={5}>5 / trang</option>
+            <option value={10}>10 / trang</option>
+            <option value={20}>20 / trang</option>
+            <option value={50}>50 / trang</option>
+          </select>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang đầu"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang trước"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span className="px-4 py-2 text-sm">
+            Trang <span className="font-medium">{currentPage}</span> /{" "}
+            <span className="font-medium">{totalPages}</span>
+          </span>
+          <button
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage >= totalPages}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang sau"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage >= totalPages}
+            className="p-2 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Trang cuối"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {showModal && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setShowModal(false);
-              setTabs([
-                {
-                  label: "Sản phẩm 1",
-                  data: {
-                    invoice_number: "",
-                    supplier_id: "",
-                    invoice_date: new Date().toISOString().split("T")[0],
-                    notes: "",
-                    items: [
-                      {
-                        product_id: "",
-                        name: "",
-                        price: "",
-                        category_id: "",
-                        image_url: "",
-                        brand: "",
-                        color: "",
-                        variants: [{ size: "", quantity: "", unit_cost: "" }],
-                      },
-                    ],
-                  },
-                },
-              ]);
+              handleCloseModal();
             }
           }}
         >
@@ -710,34 +898,7 @@ const PurchaseInvoices = () => {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">Thêm hóa đơn nhập hàng</h2>
               <button
-                onClick={() => {
-                  setShowModal(false);
-                  setTabs([
-                    {
-                      label: "Sản phẩm 1",
-                      data: {
-                        invoice_number: "",
-                        supplier_id: "",
-                        invoice_date: new Date().toISOString().split("T")[0],
-                        notes: "",
-                        items: [
-                          {
-                            product_id: "",
-                            name: "",
-                            price: "",
-                            category_id: "",
-                            image_url: "",
-                            brand: "",
-                            color: "",
-                            variants: [
-                              { size: "", quantity: "", unit_cost: "" },
-                            ],
-                          },
-                        ],
-                      },
-                    },
-                  ]);
-                }}
+                onClick={handleCloseModal}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <X size={24} />
@@ -1245,6 +1406,16 @@ const PurchaseInvoices = () => {
                   </p>
                 </div>
               </div>
+
+              {selectedInvoice.notes && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-gray-600 font-medium mb-1">
+                    Ghi chú
+                  </p>
+                  <p className="text-gray-800">{selectedInvoice.notes}</p>
+                </div>
+              )}
+
               {selectedInvoice.items && selectedInvoice.items.length > 0 && (
                 <div>
                   <h3 className="font-medium mb-2">Chi tiết sản phẩm</h3>
@@ -1300,6 +1471,17 @@ const PurchaseInvoices = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        show={showConfirmDialog}
+        title="Xác nhận thoát"
+        message="Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?"
+        confirmText="Thoát"
+        cancelText="Tiếp tục chỉnh sửa"
+        confirmColor="red"
+        onConfirm={handleConfirmClose}
+        onCancel={handleCancelClose}
+      />
     </div>
   );
 };
