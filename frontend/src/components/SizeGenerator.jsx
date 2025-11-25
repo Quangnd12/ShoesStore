@@ -3,12 +3,14 @@ import { Plus } from "lucide-react";
 
 /**
  * Component tự động tạo các size liên tiếp
- * @param {Function} onGenerate - Callback khi generate sizes (nhận array của sizes)
+ * @param {Function} onGenerate - Callback khi generate sizes (nhận array của sizes với quantity và unit_cost)
  */
 const SizeGenerator = ({ onGenerate }) => {
   const [startSize, setStartSize] = useState("");
   const [count, setCount] = useState("");
   const [increment, setIncrement] = useState("0.5");
+  const [defaultQuantity, setDefaultQuantity] = useState("");
+  const [defaultUnitCost, setDefaultUnitCost] = useState("");
 
   const handleGenerate = () => {
     const start = parseFloat(startSize);
@@ -22,7 +24,11 @@ const SizeGenerator = ({ onGenerate }) => {
 
     const sizes = [];
     for (let i = 0; i < num; i++) {
-      sizes.push((start + i * inc).toFixed(1));
+      sizes.push({
+        size: (start + i * inc).toFixed(1),
+        quantity: defaultQuantity || "",
+        unit_cost: defaultUnitCost || "",
+      });
     }
 
     onGenerate(sizes);
@@ -30,6 +36,8 @@ const SizeGenerator = ({ onGenerate }) => {
     // Reset form
     setStartSize("");
     setCount("");
+    setDefaultQuantity("");
+    setDefaultUnitCost("");
   };
 
   return (
@@ -39,7 +47,7 @@ const SizeGenerator = ({ onGenerate }) => {
           🚀 Tạo nhanh nhiều size
         </span>
       </div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-6 gap-2">
         <div>
           <label className="block text-xs text-gray-600 mb-1">
             Size bắt đầu
@@ -79,6 +87,33 @@ const SizeGenerator = ({ onGenerate }) => {
             <option value="1">1.0</option>
           </select>
         </div>
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">
+            SL mỗi size
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={defaultQuantity}
+            onChange={(e) => setDefaultQuantity(e.target.value)}
+            placeholder="Tùy chọn"
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">
+            Giá nhập/đơn vị
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={defaultUnitCost}
+            onChange={(e) => setDefaultUnitCost(e.target.value)}
+            placeholder="Tùy chọn"
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
         <div className="flex items-end">
           <button
             type="button"
@@ -91,7 +126,7 @@ const SizeGenerator = ({ onGenerate }) => {
         </div>
       </div>
       <p className="text-xs text-gray-500 mt-2">
-        VD: Size 36, số lượng 5, bước 0.5 → tạo: 36, 36.5, 37, 37.5, 38
+        💡 Nhập "SL mỗi size" và "Giá nhập/đơn vị" để tự động điền cho tất cả biến thể
       </p>
     </div>
   );

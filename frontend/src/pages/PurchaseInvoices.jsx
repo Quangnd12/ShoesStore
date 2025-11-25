@@ -464,36 +464,148 @@ const PurchaseInvoices = () => {
         items,
       });
 
-      setShowModal(false);
-      setTabs([
-        {
-          label: "Sản phẩm 1",
-          data: {
-            invoice_number: "",
-            supplier_id: "",
-            invoice_date: new Date().toISOString().split("T")[0],
-            notes: "",
-            items: [
-              {
-                product_id: "",
-                name: "",
-                price: "",
-                category_id: "",
-                image_url: "",
-                brand: "",
-                color: "",
-                variants: [{ size: "", quantity: "", unit_cost: "" }],
-              },
-            ],
+      // Xóa tab đã submit thành công
+      const newTabs = tabs.filter((_, i) => i !== tabIndex);
+      if (newTabs.length === 0) {
+        // Nếu không còn tab nào, đóng modal và reset
+        setShowModal(false);
+        setTabs([
+          {
+            label: "Sản phẩm 1",
+            data: {
+              invoice_number: "",
+              supplier_id: "",
+              invoice_date: new Date().toISOString().split("T")[0],
+              notes: "",
+              items: [
+                {
+                  product_id: "",
+                  name: "",
+                  price: "",
+                  category_id: "",
+                  image_url: "",
+                  brand: "",
+                  color: "",
+                  variants: [{ size: "", quantity: "", unit_cost: "" }],
+                },
+              ],
+            },
           },
-        },
-      ]);
+        ]);
+        setActiveTabIndex(0);
+      } else {
+        setTabs(newTabs);
+        // Điều chỉnh activeTabIndex nếu cần
+        if (activeTabIndex >= newTabs.length) {
+          setActiveTabIndex(Math.max(0, newTabs.length - 1));
+        } else if (activeTabIndex > tabIndex) {
+          setActiveTabIndex(activeTabIndex - 1);
+        }
+      }
+      
       fetchInvoices();
       // Refresh danh sách sản phẩm
       window.dispatchEvent(new Event("products-updated"));
       showToast("Tạo hóa đơn nhập thành công!", "success");
     } catch (error) {
       showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
+    }
+  };
+
+  // Tạo tất cả hóa đơn cùng lúc
+  const handleSubmitAll = async () => {
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    for (let i = 0; i < tabs.length; i++) {
+      try {
+        const tabData = tabs[i].data;
+        const items = [];
+
+        // Chuyển đổi từ cấu trúc variants sang items cho API
+        tabData.items.forEach((item) => {
+          if (item.product_id) {
+            item.variants.forEach((variant) => {
+              items.push({
+                product_id: parseInt(item.product_id),
+                quantity: parseInt(variant.quantity),
+                unit_cost: parseFloat(variant.unit_cost),
+                size: variant.size || null,
+              });
+            });
+          } else {
+            item.variants.forEach((variant) => {
+              items.push({
+                name: item.name,
+                price: parseFloat(item.price),
+                category_id: parseInt(item.category_id),
+                quantity: parseInt(variant.quantity),
+                unit_cost: parseFloat(variant.unit_cost),
+                size: variant.size || null,
+                image_url: item.image_url || null,
+                brand: item.brand || null,
+                color: item.color || null,
+              });
+            });
+          }
+        });
+
+        await purchaseInvoicesAPI.create({
+          invoice_number: tabData.invoice_number,
+          supplier_id: parseInt(tabData.supplier_id),
+          invoice_date: tabData.invoice_date,
+          notes: tabData.notes,
+          items,
+        });
+
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        errors.push(`${tabs[i].label}: ${error.response?.data?.message || "Lỗi không xác định"}`);
+      }
+    }
+
+    // Đóng modal và reset
+    setShowModal(false);
+    setTabs([
+      {
+        label: "Sản phẩm 1",
+        data: {
+          invoice_number: "",
+          supplier_id: "",
+          invoice_date: new Date().toISOString().split("T")[0],
+          notes: "",
+          items: [
+            {
+              product_id: "",
+              name: "",
+              price: "",
+              category_id: "",
+              image_url: "",
+              brand: "",
+              color: "",
+              variants: [{ size: "", quantity: "", unit_cost: "" }],
+            },
+          ],
+        },
+      },
+    ]);
+    setActiveTabIndex(0);
+    
+    fetchInvoices();
+    window.dispatchEvent(new Event("products-updated"));
+
+    // Hiển thị kết quả
+    if (errorCount === 0) {
+      showToast(`Tạo thành công ${successCount} hóa đơn!`, "success");
+    } else if (successCount === 0) {
+      showToast(`Tất cả ${errorCount} hóa đơn đều thất bại!`, "error");
+    } else {
+      showToast(
+        `Tạo thành công ${successCount} hóa đơn, thất bại ${errorCount} hóa đơn. ${errors.join("; ")}`,
+        "warning"
+      );
     }
   };
 
@@ -1205,17 +1317,10 @@ const PurchaseInvoices = () => {
 
                           {/* Size Generator */}
                           <SizeGenerator
-                            onGenerate={(sizes) => {
+                            onGenerate={(variants) => {
                               const newTabs = [...tabs];
-                              const currentUnitCost =
-                                item.variants[0]?.unit_cost || "";
-                              const newVariants = sizes.map((size) => ({
-                                size: size,
-                                quantity: "",
-                                unit_cost: currentUnitCost,
-                              }));
-                              newTabs[tabIndex].data.items[index].variants =
-                                newVariants;
+                              // variants đã có cấu trúc {size, quantity, unit_cost}
+                              newTabs[tabIndex].data.items[index].variants = variants;
                               setTabs(newTabs);
                             }}
                           />
@@ -1314,49 +1419,63 @@ const PurchaseInvoices = () => {
                     ))}
                   </div>
 
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowModal(false);
-                        setTabs([
-                          {
-                            label: "Sản phẩm 1",
-                            data: {
-                              invoice_number: "",
-                              supplier_id: "",
-                              invoice_date: new Date()
-                                .toISOString()
-                                .split("T")[0],
-                              notes: "",
-                              items: [
-                                {
-                                  product_id: "",
-                                  name: "",
-                                  price: "",
-                                  category_id: "",
-                                  image_url: "",
-                                  brand: "",
-                                  color: "",
-                                  variants: [
-                                    { size: "", quantity: "", unit_cost: "" },
-                                  ],
-                                },
-                              ],
+                  <div className="flex justify-between items-center pt-4">
+                    <div>
+                      {tabs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={handleSubmitAll}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
+                        >
+                          <Plus size={18} />
+                          <span>Tạo tất cả {tabs.length} hóa đơn</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowModal(false);
+                          setTabs([
+                            {
+                              label: "Sản phẩm 1",
+                              data: {
+                                invoice_number: "",
+                                supplier_id: "",
+                                invoice_date: new Date()
+                                  .toISOString()
+                                  .split("T")[0],
+                                notes: "",
+                                items: [
+                                  {
+                                    product_id: "",
+                                    name: "",
+                                    price: "",
+                                    category_id: "",
+                                    image_url: "",
+                                    brand: "",
+                                    color: "",
+                                    variants: [
+                                      { size: "", quantity: "", unit_cost: "" },
+                                    ],
+                                  },
+                                ],
+                              },
                             },
-                          },
-                        ]);
-                      }}
-                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
-                      Hủy (ESC)
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      Tạo hóa đơn
-                    </button>
+                          ]);
+                        }}
+                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        Hủy (ESC)
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Tạo hóa đơn này
+                      </button>
+                    </div>
                   </div>
                 </form>
               )}
