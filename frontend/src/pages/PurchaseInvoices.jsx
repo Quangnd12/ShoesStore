@@ -11,6 +11,7 @@ import DynamicTabs from "../components/DynamicTabs";
 import SizeGenerator from "../components/SizeGenerator";
 import { useFormDirty } from "../hooks/useFormDirty";
 import ConfirmDialog from "../components/ConfirmDialog";
+import SearchableSelect from "../components/SearchableSelect";
 
 const PurchaseInvoices = () => {
   const { showToast } = useToast();

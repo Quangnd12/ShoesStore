@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Edit, X } from "lucide-react";
+import { Plus, Eye, Edit, X, ChevronDown, ChevronUp } from "lucide-react";
 import {
   salesInvoicesAPI,
   productsAPI,
@@ -9,6 +9,7 @@ import { useToast } from "../contexts/ToastContext";
 import DynamicTabs from "../components/DynamicTabs";
 import { useFormDirty } from "../hooks/useFormDirty";
 import ConfirmDialog from "../components/ConfirmDialog";
+import SearchableSelect from "../components/SearchableSelect";
 
 const SalesInvoices = () => {
   const { showToast } = useToast();
@@ -83,6 +84,9 @@ const SalesInvoices = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Accordion state - track which dates are expanded
+  const [expandedDates, setExpandedDates] = useState({});
 
   useEffect(() => {
     fetchProducts();
@@ -522,6 +526,45 @@ const SalesInvoices = () => {
     );
   });
 
+  // Gom nhóm hóa đơn theo ngày
+  const groupedInvoices = useMemo(() => {
+    const groups = {};
+    
+    filteredInvoices.forEach((invoice) => {
+      const dateKey = new Date(invoice.invoice_date).toLocaleDateString("vi-VN");
+      
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          date: dateKey,
+          invoices: [],
+          totalRevenue: 0,
+          totalProducts: 0,
+        };
+      }
+      
+      groups[dateKey].invoices.push(invoice);
+      groups[dateKey].totalRevenue += parseFloat(invoice.total_revenue) || 0;
+      
+      // Sử dụng total_quantity từ backend (đã được tính sẵn)
+      groups[dateKey].totalProducts += parseInt(invoice.total_quantity) || 0;
+    });
+    
+    // Chuyển object thành array và sắp xếp theo ngày giảm dần
+    return Object.values(groups).sort((a, b) => {
+      const dateA = a.date.split("/").reverse().join("-");
+      const dateB = b.date.split("/").reverse().join("-");
+      return dateB.localeCompare(dateA);
+    });
+  }, [filteredInvoices]);
+
+  // Toggle accordion
+  const toggleDate = (dateKey) => {
+    setExpandedDates((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -646,73 +689,127 @@ const SalesInvoices = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Số hóa đơn
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Khách hàng
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Ngày
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Ngày cập nhật
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Tổng tiền
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Thao tác
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredInvoices.map((invoice) => (
-              <tr key={invoice.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {invoice.invoice_number}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {invoice.customer_name || invoice.account_username || "-"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(invoice.invoice_date).toLocaleDateString("vi-VN")}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {invoice.updated_at
-                    ? new Date(invoice.updated_at).toLocaleDateString("vi-VN")
-                    : "-"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {new Intl.NumberFormat("vi-VN").format(invoice.total_revenue)}{" "}
-                  đ
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center space-x-3">
-                    <button
-                      onClick={() => handleViewDetail(invoice.id)}
-                      className="text-blue-600 hover:text-blue-900"
-                      title="Xem chi tiết"
-                    >
-                      <Eye size={18} />
-                    </button>
-                    <button
-                      onClick={() => handleOpenReturnModal(invoice.id)}
-                      className="text-amber-600 hover:text-amber-800"
-                      title="Tạo hoàn trả / đổi hàng"
-                    >
-                      <Edit size={18} />
-                    </button>
+      {/* Grouped Invoices by Date */}
+      <div className="space-y-4">
+        {groupedInvoices.map((group) => {
+          const isExpanded = expandedDates[group.date];
+          
+          return (
+            <div key={group.date} className="bg-white rounded-lg shadow overflow-hidden">
+              {/* Accordion Header */}
+              <button
+                onClick={() => toggleDate(group.date)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
+                    {isExpanded ? (
+                      <ChevronUp size={20} className="text-blue-600" />
+                    ) : (
+                      <ChevronDown size={20} className="text-blue-600" />
+                    )}
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <div className="text-left">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Ngày {group.date}
+                    </h3>
+                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
+                      <span className="flex items-center">
+                        <span className="font-medium text-blue-600">{group.invoices.length}</span>
+                        <span className="ml-1">hóa đơn</span>
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span className="flex items-center">
+                        <span className="font-medium text-green-600">
+                          {new Intl.NumberFormat("vi-VN").format(group.totalRevenue)} ₫
+                        </span>
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span className="flex items-center">
+                        <span className="font-medium text-purple-600">{group.totalProducts}</span>
+                        <span className="ml-1">sản phẩm</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">
+                  {isExpanded ? "Thu gọn" : "Xem chi tiết"}
+                </div>
+              </button>
+
+              {/* Accordion Content */}
+              {isExpanded && (
+                <div className="border-t border-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Số hóa đơn
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Khách hàng
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Ngày cập nhật
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Tổng tiền
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Thao tác
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {group.invoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {invoice.invoice_number}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {invoice.customer_name || invoice.account_username || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {invoice.updated_at
+                              ? new Date(invoice.updated_at).toLocaleDateString("vi-VN")
+                              : "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {new Intl.NumberFormat("vi-VN").format(invoice.total_revenue)} ₫
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center space-x-3">
+                              <button
+                                onClick={() => handleViewDetail(invoice.id)}
+                                className="text-blue-600 hover:text-blue-900"
+                                title="Xem chi tiết"
+                              >
+                                <Eye size={18} />
+                              </button>
+                              <button
+                                onClick={() => handleOpenReturnModal(invoice.id)}
+                                className="text-amber-600 hover:text-amber-800"
+                                title="Tạo hoàn trả / đổi hàng"
+                              >
+                                <Edit size={18} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        
+        {groupedInvoices.length === 0 && (
+          <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+            Không có hóa đơn nào
+          </div>
+        )}
       </div>
 
       {/* Pagination */}
@@ -927,6 +1024,20 @@ const SalesInvoices = () => {
                   const selectedProduct = Array.isArray(products)
                     ? products.find((p) => p.id === parseInt(item.product_id))
                     : null;
+                  
+                  // Lấy danh sách ID sản phẩm đã được chọn ở các dòng khác
+                  const selectedProductIds = tab.data.items
+                    .map((itm, idx) => idx !== index ? parseInt(itm.product_id) : null)
+                    .filter(id => id !== null && !isNaN(id));
+                  
+                  // Lọc sản phẩm: còn hàng và chưa được chọn ở dòng khác
+                  const availableProducts = Array.isArray(products)
+                    ? products.filter((p) => 
+                        p.stock_quantity > 0 && 
+                        !selectedProductIds.includes(p.id)
+                      )
+                    : [];
+                  
                   return (
                     <div
                       key={index}
@@ -948,34 +1059,28 @@ const SalesInvoices = () => {
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">
-                            Sản phẩm *
-                          </label>
-                          <select
+                          <SearchableSelect
+                            label="Sản phẩm"
                             required
                             value={item.product_id}
-                            onChange={(e) =>
+                            onChange={(value) =>
                               handleItemChange(
                                 tabIndex,
                                 index,
                                 "product_id",
-                                e.target.value
+                                value
                               )
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                          >
-                            <option value="">Chọn sản phẩm</option>
-                            {Array.isArray(products) &&
-                              products
-                                .filter((p) => p.stock_quantity > 0)
-                                .map((product) => (
-                                  <option key={product.id} value={product.id}>
-                                    {product.name} - Size:{" "}
-                                    {product.size || "N/A"} (Còn:{" "}
-                                    {product.stock_quantity})
-                                  </option>
-                                ))}
-                          </select>
+                            options={availableProducts}
+                            getOptionLabel={(product) =>
+                              `${product.name} - Size: ${product.size || "N/A"} (Còn: ${product.stock_quantity})`
+                            }
+                            getOptionValue={(product) => product.id}
+                            placeholder="Chọn sản phẩm"
+                            searchPlaceholder="Tìm kiếm sản phẩm..."
+                            emptyMessage="Không tìm thấy sản phẩm"
+                            className="text-sm"
+                          />
                         </div>
                         <div>
                           <label className="block text-xs text-gray-600 mb-1">
@@ -1117,12 +1222,14 @@ const SalesInvoices = () => {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                   >
                     <option value="">Chọn sản phẩm</option>
-                    {selectedInvoiceForReturn.items?.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.product_name} - Size: {item.size_eu || "N/A"} (SL:{" "}
-                        {item.quantity})
-                      </option>
-                    ))}
+                    {selectedInvoiceForReturn.items
+                      ?.filter((item) => item.quantity > 0)
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.product_name} - Size: {item.size_eu || "N/A"} (SL:{" "}
+                          {item.quantity})
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -1374,6 +1481,50 @@ const SalesInvoices = () => {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {selectedInvoice.returnExchanges && selectedInvoice.returnExchanges.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="font-medium mb-2 text-orange-600">Lịch sử hoàn trả / đổi hàng</h3>
+                  <div className="space-y-3">
+                    {selectedInvoice.returnExchanges.map((re, idx) => (
+                      <div key={idx} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            re.type === 'return' 
+                              ? 'bg-red-100 text-red-700' 
+                              : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {re.type === 'return' ? 'Hoàn trả' : 'Đổi hàng'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(re.created_at).toLocaleString("vi-VN")}
+                          </span>
+                        </div>
+                        <div className="text-sm space-y-1">
+                          <p>
+                            <span className="font-medium">Sản phẩm cũ:</span>{" "}
+                            {re.old_product_name} - Size: {re.old_product_size || "N/A"} (SL: {re.return_quantity})
+                          </p>
+                          {re.type === 'exchange' && re.new_product_name && (
+                            <p>
+                              <span className="font-medium">Sản phẩm mới:</span>{" "}
+                              {re.new_product_name} - Size: {re.new_product_size || "N/A"}
+                            </p>
+                          )}
+                          <p>
+                            <span className="font-medium">Lý do:</span> {re.reason}
+                          </p>
+                          {re.notes && (
+                            <p>
+                              <span className="font-medium">Ghi chú:</span> {re.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

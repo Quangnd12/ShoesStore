@@ -15,6 +15,7 @@ import {
 import { productsAPI, categoriesAPI } from "../services/api";
 import { useToast } from "../contexts/ToastContext";
 import ProductDetailModal from "../components/ProductDetailModal";
+import SearchableSelect from "../components/SearchableSelect";
 
 const ProductsEnhanced = () => {
   const { showToast } = useToast();
@@ -768,26 +769,17 @@ const ProductsEnhanced = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Danh mục *
-                  </label>
-                  <select
-                    required
-                    value={formData.category_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category_id: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Chọn danh mục</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SearchableSelect
+                  options={categories}
+                  value={formData.category_id}
+                  onChange={(value) =>
+                    setFormData({ ...formData, category_id: value })
+                  }
+                  label="Danh mục"
+                  placeholder="Chọn danh mục"
+                  searchPlaceholder="Tìm danh mục..."
+                  required
+                />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tồn kho *

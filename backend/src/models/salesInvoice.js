@@ -172,10 +172,16 @@ const SalesInvoice = {
     const offsetInt = parseInt(offset) || 0;
 
     // Sử dụng query với giá trị trực tiếp thay vì prepared statement
+    // Thêm tổng số sản phẩm (total_quantity) từ sales_invoice_items
     const [rows] = await db.query(
-      `SELECT si.*, u.username as account_username, u.email as account_email 
+      `SELECT si.*, 
+              u.username as account_username, 
+              u.email as account_email,
+              COALESCE(SUM(sii.quantity), 0) as total_quantity
        FROM sales_invoices si 
        LEFT JOIN users u ON si.customer_id = u.id 
+       LEFT JOIN sales_invoice_items sii ON si.id = sii.sales_invoice_id
+       GROUP BY si.id
        ORDER BY si.invoice_date DESC, si.created_at DESC 
        LIMIT ${limitInt} OFFSET ${offsetInt}`
     );
@@ -208,7 +214,30 @@ const SalesInvoice = {
       `SELECT sii.*, p.name as product_name, p.brand, p.image_url 
        FROM sales_invoice_items sii 
        LEFT JOIN products p ON sii.product_id = p.id 
-       WHERE sii.sales_invoice_id = ?`,
+       WHERE sii.sales_invoice_id = ? AND sii.quantity > 0`,
+      [invoiceId]
+    );
+    return rows;
+  },
+
+  // Lấy thông tin hoàn trả/đổi hàng của hóa đơn
+  getReturnExchanges: async (invoiceId) => {
+    const [rows] = await db.execute(
+      `SELECT re.*, 
+              rei.sales_invoice_item_id, 
+              rei.product_id as old_product_id,
+              rei.quantity as return_quantity,
+              rei.new_product_id,
+              p_old.name as old_product_name,
+              p_old.size as old_product_size,
+              p_new.name as new_product_name,
+              p_new.size as new_product_size
+       FROM return_exchanges re
+       LEFT JOIN return_exchange_items rei ON re.id = rei.return_exchange_id
+       LEFT JOIN products p_old ON rei.product_id = p_old.id
+       LEFT JOIN products p_new ON rei.new_product_id = p_new.id
+       WHERE re.sales_invoice_id = ?
+       ORDER BY re.created_at DESC`,
       [invoiceId]
     );
     return rows;

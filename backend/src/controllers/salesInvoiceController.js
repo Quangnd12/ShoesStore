@@ -86,7 +86,8 @@ exports.getSalesInvoiceById = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy hóa đơn bán" });
     }
     const items = await SalesInvoice.getItems(id);
-    res.json({ ...invoice, items });
+    const returnExchanges = await SalesInvoice.getReturnExchanges(id);
+    res.json({ ...invoice, items, returnExchanges });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
