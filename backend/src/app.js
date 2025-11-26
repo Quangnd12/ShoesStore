@@ -17,6 +17,7 @@ const purchaseInvoiceRoutes = require("./routes/purchaseInvoice");
 const salesInvoiceRoutes = require("./routes/salesInvoice");
 const reportRoutes = require("./routes/report");
 const returnExchangeRoutes = require("./routes/returnExchange");
+const dashboardRoutes = require("./routes/dashboard");
 
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
@@ -27,6 +28,7 @@ app.use("/api/purchase-invoices", purchaseInvoiceRoutes);
 app.use("/api/sales-invoices", salesInvoiceRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/return-exchanges", returnExchangeRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => res.send("API is running!"));
 

@@ -88,6 +88,9 @@ const SalesInvoices = () => {
   // Accordion state - track which dates are expanded
   const [expandedDates, setExpandedDates] = useState({});
 
+  // Cache cho pagination
+  const [pageCache, setPageCache] = useState({});
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -98,6 +101,22 @@ const SalesInvoices = () => {
 
   const fetchInvoices = async () => {
     try {
+      // Tạo cache key
+      const cacheKey = JSON.stringify({
+        page: currentPage,
+        limit: itemsPerPage,
+        filters: filters,
+      });
+
+      // Kiểm tra cache
+      if (pageCache[cacheKey]) {
+        const cached = pageCache[cacheKey];
+        setInvoices(cached.invoices);
+        setTotalPages(cached.totalPages);
+        setLoading(false);
+        return;
+      }
+
       const response = await salesInvoicesAPI.getAll({ 
         page: currentPage,
         limit: itemsPerPage 
@@ -105,9 +124,20 @@ const SalesInvoices = () => {
       // API trả về { invoices: [...], totalItems, totalPages, ... }
       const invoicesData = response.data?.invoices || [];
       const total = response.data?.totalItems || invoicesData.length;
+      const pages = response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1;
       
       setInvoices(invoicesData);
-      setTotalPages(response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1);
+      setTotalPages(pages);
+
+      // Lưu vào cache
+      setPageCache((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          invoices: invoicesData,
+          totalPages: pages,
+          timestamp: Date.now(),
+        },
+      }));
     } catch (error) {
       console.error("Error fetching invoices:", error);
       showToast("Không thể tải danh sách hóa đơn bán", "error");
@@ -290,6 +320,8 @@ const SalesInvoices = () => {
         }
       }
       
+      // Xóa cache vì dữ liệu đã thay đổi
+      setPageCache({});
       await fetchInvoices();
       await fetchProducts();
     } catch (error) {

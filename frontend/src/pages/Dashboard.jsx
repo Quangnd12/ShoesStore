@@ -27,6 +27,10 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import TopSellingProducts from "../components/dashboard/TopSellingProducts";
+import OrdersByHour from "../components/dashboard/OrdersByHour";
+import LowStockAlert from "../components/dashboard/LowStockAlert";
+import RevenueGrowth from "../components/dashboard/RevenueGrowth";
 
 const Dashboard = () => {
   const { showToast } = useToast();
@@ -266,6 +270,18 @@ const Dashboard = () => {
             </div>
           );
         })}
+      </div>
+
+      {/* New Widgets Row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <TopSellingProducts />
+        <RevenueGrowth />
+      </div>
+
+      {/* New Widgets Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <OrdersByHour />
+        <LowStockAlert />
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 border border-gray-200">

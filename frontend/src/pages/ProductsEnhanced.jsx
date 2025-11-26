@@ -37,7 +37,18 @@ const ProductsEnhanced = () => {
   const [displayedCount, setDisplayedCount] = useState(10);
   const [useLazyLoading, setUseLazyLoading] = useState(false);
 
-  // Filters
+  // Filters - Tách thành 2 state: input filters và debounced filters
+  const [inputFilters, setInputFilters] = useState({
+    name: "",
+    category: "",
+    brand: "",
+    minPrice: "",
+    maxPrice: "",
+    minStock: "",
+    maxStock: "",
+  });
+
+  // Filters thực sự được dùng để gọi API (sau debounce)
   const [filters, setFilters] = useState({
     name: "",
     category: "",
@@ -47,6 +58,9 @@ const ProductsEnhanced = () => {
     minStock: "",
     maxStock: "",
   });
+
+  // Cache cho pagination - Lưu kết quả của các trang đã tải
+  const [pageCache, setPageCache] = useState({});
 
   const [formData, setFormData] = useState({
     name: "",
@@ -114,10 +128,34 @@ const ProductsEnhanced = () => {
     reader.readAsDataURL(file);
   };
 
+  // Debounce filters: Chờ 500ms sau khi người dùng ngừng gõ
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      setFilters(inputFilters);
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [inputFilters]);
+
+  // Reset pagination và xóa cache khi filters thay đổi
+  useEffect(() => {
+    setCurrentPage(1);
+    setDisplayedCount(10);
+    setPageCache({}); // Xóa cache vì filters đã thay đổi
+  }, [
+    filters.name,
+    filters.category,
+    filters.brand,
+    filters.minPrice,
+    filters.maxPrice,
+    filters.minStock,
+    filters.maxStock,
+  ]);
+
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [currentPage, itemsPerPage]);
+  }, [currentPage, itemsPerPage, filters]);
 
   useEffect(() => {
     const handleProductsUpdate = () => {
@@ -136,18 +174,59 @@ const ProductsEnhanced = () => {
 
   const fetchProducts = async () => {
     try {
-      setLoading(true);
-      const response = await productsAPI.getAll({
+      // Tạo cache key từ params
+      const cacheKey = JSON.stringify({
         page: currentPage,
         limit: itemsPerPage,
+        filters: filters,
       });
+
+      // Kiểm tra cache trước
+      if (pageCache[cacheKey]) {
+        const cached = pageCache[cacheKey];
+        setAllProducts(cached.products);
+        setTotalItems(cached.totalItems);
+        setTotalPages(cached.totalPages);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      
+      // Chuẩn bị params với filters
+      const params = {
+        page: currentPage,
+        limit: itemsPerPage,
+      };
+
+      // Thêm filters vào params nếu có giá trị
+      if (filters.name) params.name = filters.name;
+      if (filters.category) params.category_id = filters.category;
+      if (filters.brand) params.brand = filters.brand;
+      if (filters.minPrice) params.minPrice = filters.minPrice;
+      if (filters.maxPrice) params.maxPrice = filters.maxPrice;
+      if (filters.minStock) params.minStock = filters.minStock;
+      if (filters.maxStock) params.maxStock = filters.maxStock;
+
+      const response = await productsAPI.getAll(params);
       const products = response.data?.products || response.data || [];
       const total = response.data?.totalItems ?? products.length;
+      const pages = response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1;
+
       setAllProducts(products);
       setTotalItems(total);
-      setTotalPages(
-        response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1
-      );
+      setTotalPages(pages);
+
+      // Lưu vào cache
+      setPageCache((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          products: products,
+          totalItems: total,
+          totalPages: pages,
+          timestamp: Date.now(),
+        },
+      }));
     } catch (error) {
       console.error("Error fetching products:", error);
       showToast("Không thể tải danh sách sản phẩm", "error");
@@ -216,58 +295,30 @@ const ProductsEnhanced = () => {
     return result;
   }, [allProducts]);
 
-  // Lọc theo bộ lọc hiện tại
-  const filteredProducts = useMemo(() => {
-    let filtered = groupedProducts;
-    if (filters.name) {
-      filtered = filtered.filter((group) =>
-        group.name.toLowerCase().includes(filters.name.toLowerCase())
-      );
-    }
-    if (filters.category) {
-      filtered = filtered.filter(
-        (group) =>
-          group.category?.id?.toString() === filters.category ||
-          group.category?.name === filters.category
-      );
-    }
-    if (filters.brand) {
-      filtered = filtered.filter((group) =>
-        Array.from(group.brands).some((b) =>
-          b.toLowerCase().includes(filters.brand.toLowerCase())
-        )
-      );
-    }
-    if (filters.minPrice) {
-      filtered = filtered.filter(
-        (group) => group.minPrice >= parseFloat(filters.minPrice)
-      );
-    }
-    if (filters.maxPrice) {
-      filtered = filtered.filter(
-        (group) => group.maxPrice <= parseFloat(filters.maxPrice)
-      );
-    }
-    if (filters.minStock) {
-      filtered = filtered.filter(
-        (group) => group.totalStock >= parseInt(filters.minStock)
-      );
-    }
-    if (filters.maxStock) {
-      filtered = filtered.filter(
-        (group) => group.totalStock <= parseInt(filters.maxStock)
-      );
-    }
-    return filtered;
-  }, [groupedProducts, filters]);
+  // Backend đã xử lý filter, không cần filter lại ở client
+  const filteredProducts = groupedProducts;
 
-  // Nếu bật lazy loading thì cắt theo frontend, ngược lại dùng dữ liệu backend trả về
+  // Backend đã xử lý pagination, chỉ cần hiển thị dữ liệu trả về
   const displayedProducts = useMemo(() => {
     if (useLazyLoading) {
       return filteredProducts.slice(0, displayedCount);
     }
+    // Backend đã pagination, trả về tất cả filteredProducts
     return filteredProducts;
   }, [filteredProducts, displayedCount, useLazyLoading]);
+
+  // Sử dụng thông tin pagination từ backend
+  const paginationInfo = useMemo(() => {
+    const start = totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
+    const end = Math.min(currentPage * itemsPerPage, totalItems);
+    
+    return {
+      totalItems: totalItems,
+      totalPages: totalPages,
+      start: start,
+      end: end,
+    };
+  }, [totalItems, totalPages, currentPage, itemsPerPage]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -282,6 +333,9 @@ const ProductsEnhanced = () => {
       setShowModal(false);
       setEditingProduct(null);
       resetForm();
+      
+      // Xóa cache vì dữ liệu đã thay đổi
+      setPageCache({});
       fetchProducts();
     } catch (error) {
       showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
@@ -310,6 +364,9 @@ const ProductsEnhanced = () => {
     try {
       await productsAPI.delete(id);
       showToast("Xóa sản phẩm thành công!", "success");
+      
+      // Xóa cache vì dữ liệu đã thay đổi
+      setPageCache({});
       fetchProducts();
     } catch (error) {
       showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
@@ -337,7 +394,7 @@ const ProductsEnhanced = () => {
   };
 
   const clearFilters = () => {
-    setFilters({
+    setInputFilters({
       name: "",
       category: "",
       brand: "",
@@ -410,8 +467,8 @@ const ProductsEnhanced = () => {
             </label>
             <input
               type="text"
-              value={filters.name}
-              onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+              value={inputFilters.name}
+              onChange={(e) => setInputFilters({ ...inputFilters, name: e.target.value })}
               placeholder="Tìm theo tên..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             />
@@ -419,9 +476,9 @@ const ProductsEnhanced = () => {
           <div>
             <label className="block text-xs text-gray-600 mb-1">Danh mục</label>
             <select
-              value={filters.category}
+              value={inputFilters.category}
               onChange={(e) =>
-                setFilters({ ...filters, category: e.target.value })
+                setInputFilters({ ...inputFilters, category: e.target.value })
               }
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
             >
@@ -439,9 +496,9 @@ const ProductsEnhanced = () => {
             </label>
             <input
               type="text"
-              value={filters.brand}
+              value={inputFilters.brand}
               onChange={(e) =>
-                setFilters({ ...filters, brand: e.target.value })
+                setInputFilters({ ...inputFilters, brand: e.target.value })
               }
               placeholder="Tìm theo thương hiệu..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -453,9 +510,9 @@ const ProductsEnhanced = () => {
             </label>
             <input
               type="number"
-              value={filters.minPrice}
+              value={inputFilters.minPrice}
               onChange={(e) =>
-                setFilters({ ...filters, minPrice: e.target.value })
+                setInputFilters({ ...inputFilters, minPrice: e.target.value })
               }
               placeholder="Min"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -467,9 +524,9 @@ const ProductsEnhanced = () => {
             </label>
             <input
               type="number"
-              value={filters.maxPrice}
+              value={inputFilters.maxPrice}
               onChange={(e) =>
-                setFilters({ ...filters, maxPrice: e.target.value })
+                setInputFilters({ ...inputFilters, maxPrice: e.target.value })
               }
               placeholder="Max"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -481,9 +538,9 @@ const ProductsEnhanced = () => {
             </label>
             <input
               type="number"
-              value={filters.minStock}
+              value={inputFilters.minStock}
               onChange={(e) =>
-                setFilters({ ...filters, minStock: e.target.value })
+                setInputFilters({ ...inputFilters, minStock: e.target.value })
               }
               placeholder="Min"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
@@ -495,9 +552,9 @@ const ProductsEnhanced = () => {
             </label>
             <input
               type="number"
-              value={filters.maxStock}
+              value={inputFilters.maxStock}
               onChange={(e) =>
-                setFilters({ ...filters, maxStock: e.target.value })
+                setInputFilters({ ...inputFilters, maxStock: e.target.value })
               }
               placeholder="Max"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"

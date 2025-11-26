@@ -1,17 +1,107 @@
 const db = require("../config/db");
 
 const Product = {
-  getAll: async (limit, offset) => {
-    const [rows] = await db.execute(
-      `SELECT p.*, c.name as category_name, c.id as category_id
-       FROM products p 
-       LEFT JOIN categories c ON p.category_id = c.id 
-       LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`
-    );
+  getAll: async (limit, offset, filters = {}) => {
+    let query = `SELECT p.*, c.name as category_name, c.id as category_id
+                 FROM products p 
+                 LEFT JOIN categories c ON p.category_id = c.id`;
+    
+    const conditions = [];
+    const params = [];
+
+    // Tìm kiếm theo tên
+    if (filters.name) {
+      conditions.push('p.name LIKE ?');
+      params.push(`%${filters.name}%`);
+    }
+
+    // Lọc theo danh mục
+    if (filters.category_id) {
+      conditions.push('p.category_id = ?');
+      params.push(parseInt(filters.category_id));
+    }
+
+    // Lọc theo thương hiệu
+    if (filters.brand) {
+      conditions.push('p.brand LIKE ?');
+      params.push(`%${filters.brand}%`);
+    }
+
+    // Lọc theo giá
+    if (filters.minPrice) {
+      conditions.push('p.price >= ?');
+      params.push(parseFloat(filters.minPrice));
+    }
+    if (filters.maxPrice) {
+      conditions.push('p.price <= ?');
+      params.push(parseFloat(filters.maxPrice));
+    }
+
+    // Lọc theo tồn kho
+    if (filters.minStock) {
+      conditions.push('p.stock_quantity >= ?');
+      params.push(parseInt(filters.minStock));
+    }
+    if (filters.maxStock) {
+      conditions.push('p.stock_quantity <= ?');
+      params.push(parseInt(filters.maxStock));
+    }
+
+    // Thêm WHERE clause nếu có điều kiện
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    // Thêm ORDER BY, LIMIT, OFFSET
+    const limitInt = parseInt(limit);
+    const offsetInt = parseInt(offset);
+    query += ` ORDER BY p.id DESC LIMIT ${limitInt} OFFSET ${offsetInt}`;
+
+    const [rows] = await db.execute(query, params);
     return rows;
   },
-  getTotal: async () => {
-    const [rows] = await db.execute("SELECT COUNT(*) as total FROM products");
+  
+  getTotal: async (filters = {}) => {
+    let query = 'SELECT COUNT(*) as total FROM products p';
+    
+    const conditions = [];
+    const params = [];
+
+    // Áp dụng cùng filters như getAll
+    if (filters.name) {
+      conditions.push('p.name LIKE ?');
+      params.push(`%${filters.name}%`);
+    }
+    if (filters.category_id) {
+      conditions.push('p.category_id = ?');
+      params.push(parseInt(filters.category_id));
+    }
+    if (filters.brand) {
+      conditions.push('p.brand LIKE ?');
+      params.push(`%${filters.brand}%`);
+    }
+    if (filters.minPrice) {
+      conditions.push('p.price >= ?');
+      params.push(parseFloat(filters.minPrice));
+    }
+    if (filters.maxPrice) {
+      conditions.push('p.price <= ?');
+      params.push(parseFloat(filters.maxPrice));
+    }
+    if (filters.minStock) {
+      conditions.push('p.stock_quantity >= ?');
+      params.push(parseInt(filters.minStock));
+    }
+    if (filters.maxStock) {
+      conditions.push('p.stock_quantity <= ?');
+      params.push(parseInt(filters.maxStock));
+    }
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    const [rows] = await db.execute(query, params);
     return rows[0].total;
   },
   create: async (data) => {

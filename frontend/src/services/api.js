@@ -91,4 +91,12 @@ export const reportsAPI = {
     api.get("/reports/range", { params: { start_date, end_date } }),
 };
 
+// Dashboard API
+export const dashboardAPI = {
+  getTopSelling: (params) => api.get("/dashboard/top-selling", { params }),
+  getOrdersByHour: () => api.get("/dashboard/orders-by-hour"),
+  getLowStock: (params) => api.get("/dashboard/low-stock", { params }),
+  getRevenueGrowth: (params) => api.get("/dashboard/revenue-growth", { params }),
+};
+
 export default api;

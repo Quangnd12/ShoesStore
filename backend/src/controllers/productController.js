@@ -13,8 +13,19 @@ exports.getAllProducts = async (req, res) => {
         .json({ message: "Invalid page or limit parameters" });
     }
 
-    const products = await Product.getAll(limit, offset);
-    const total = await Product.getTotal();
+    // Lấy filters từ query params
+    const filters = {
+      name: req.query.name || null,
+      category_id: req.query.category_id || null,
+      brand: req.query.brand || null,
+      minPrice: req.query.minPrice || null,
+      maxPrice: req.query.maxPrice || null,
+      minStock: req.query.minStock || null,
+      maxStock: req.query.maxStock || null,
+    };
+
+    const products = await Product.getAll(limit, offset, filters);
+    const total = await Product.getTotal(filters);
 
     // Format lại dữ liệu sản phẩm
     const formattedProducts = products.map((product) => ({

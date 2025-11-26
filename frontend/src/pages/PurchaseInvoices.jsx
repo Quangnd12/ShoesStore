@@ -59,6 +59,9 @@ const PurchaseInvoices = () => {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Cache cho pagination
+  const [pageCache, setPageCache] = useState({});
+
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
@@ -191,6 +194,22 @@ const PurchaseInvoices = () => {
 
   const fetchInvoices = async () => {
     try {
+      // Tạo cache key
+      const cacheKey = JSON.stringify({
+        page: currentPage,
+        limit: itemsPerPage,
+        filters: filters,
+      });
+
+      // Kiểm tra cache
+      if (pageCache[cacheKey]) {
+        const cached = pageCache[cacheKey];
+        setInvoices(cached.invoices);
+        setTotalPages(cached.totalPages);
+        setLoading(false);
+        return;
+      }
+
       const response = await purchaseInvoicesAPI.getAll({ 
         page: currentPage,
         limit: itemsPerPage 
@@ -198,9 +217,20 @@ const PurchaseInvoices = () => {
       // API trả về { invoices: [...], totalItems, totalPages, ... }
       const invoicesData = response.data?.invoices || [];
       const total = response.data?.totalItems || invoicesData.length;
+      const pages = response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1;
       
       setInvoices(invoicesData);
-      setTotalPages(response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1);
+      setTotalPages(pages);
+
+      // Lưu vào cache
+      setPageCache((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          invoices: invoicesData,
+          totalPages: pages,
+          timestamp: Date.now(),
+        },
+      }));
     } catch (error) {
       console.error("Error fetching invoices:", error);
       showToast("Không thể tải danh sách hóa đơn nhập", "error");
@@ -503,6 +533,8 @@ const PurchaseInvoices = () => {
         }
       }
       
+      // Xóa cache vì dữ liệu đã thay đổi
+      setPageCache({});
       fetchInvoices();
       // Refresh danh sách sản phẩm
       window.dispatchEvent(new Event("products-updated"));
@@ -593,6 +625,8 @@ const PurchaseInvoices = () => {
     ]);
     setActiveTabIndex(0);
     
+    // Xóa cache vì dữ liệu đã thay đổi
+    setPageCache({});
     fetchInvoices();
     window.dispatchEvent(new Event("products-updated"));
 
