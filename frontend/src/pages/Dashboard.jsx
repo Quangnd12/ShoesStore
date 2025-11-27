@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   TrendingUp,
   DollarSign,
+  RefreshCw,
 } from "lucide-react";
 import {
   reportsAPI,
@@ -31,6 +32,8 @@ import TopSellingProducts from "../components/dashboard/TopSellingProducts";
 import OrdersByHour from "../components/dashboard/OrdersByHour";
 import LowStockAlert from "../components/dashboard/LowStockAlert";
 import RevenueGrowth from "../components/dashboard/RevenueGrowth";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 const Dashboard = () => {
   const { showToast } = useToast();
@@ -47,6 +50,10 @@ const Dashboard = () => {
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
 
+  // Cache states
+  const [statsCache, setStatsCache] = useState(null);
+  const [chartCache, setChartCache] = useState({});
+
   useEffect(() => {
     fetchStats();
   }, []);
@@ -55,8 +62,18 @@ const Dashboard = () => {
     fetchChartData();
   }, [activeTab]);
 
-  const fetchStats = async () => {
+  const fetchStats = async (forceRefresh = false) => {
     try {
+      // Kiểm tra cache (5 phút = 300000ms)
+      const CACHE_DURATION = 5 * 60 * 1000;
+      const now = Date.now();
+
+      if (!forceRefresh && statsCache && (now - statsCache.timestamp < CACHE_DURATION)) {
+        setStats(statsCache.data);
+        setLoading(false);
+        return;
+      }
+
       const [productsRes, suppliersRes, purchaseInvoicesRes, salesInvoicesRes] =
         await Promise.all([
           productsAPI.getAll({ limit: 1000 }),
@@ -95,7 +112,7 @@ const Dashboard = () => {
           }, 0)
         : 0;
 
-      setStats({
+      const statsData = {
         totalProducts: totalProductsInStock,
         totalSuppliers: suppliersArray.length,
         totalPurchaseInvoices:
@@ -104,6 +121,14 @@ const Dashboard = () => {
           salesInvoicesRes.data?.totalItems || salesInvoicesArray.length,
         totalRevenue,
         lowStockProducts: lowStock.length,
+      };
+
+      setStats(statsData);
+      
+      // Lưu vào cache
+      setStatsCache({
+        data: statsData,
+        timestamp: now,
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -113,10 +138,23 @@ const Dashboard = () => {
     }
   };
 
-  const fetchChartData = async () => {
+  const fetchChartData = async (forceRefresh = false) => {
     setChartLoading(true);
     try {
+      // Tạo cache key dựa trên activeTab và ngày hiện tại
       const today = new Date();
+      const cacheKey = `${activeTab}-${today.toISOString().split("T")[0]}`;
+      
+      // Kiểm tra cache (10 phút = 600000ms)
+      const CACHE_DURATION = 10 * 60 * 1000;
+      const now = Date.now();
+
+      if (!forceRefresh && chartCache[cacheKey] && (now - chartCache[cacheKey].timestamp < CACHE_DURATION)) {
+        setChartData(chartCache[cacheKey].data);
+        setChartLoading(false);
+        return;
+      }
+
       let data = [];
 
       switch (activeTab) {
@@ -174,6 +212,15 @@ const Dashboard = () => {
       }
 
       setChartData(data);
+      
+      // Lưu vào cache
+      setChartCache((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          data: data,
+          timestamp: now,
+        },
+      }));
     } catch (error) {
       console.error("Error fetching chart data:", error);
       setChartData([]);
@@ -238,13 +285,54 @@ const Dashboard = () => {
     { id: "year", label: "Năm" },
   ];
 
-  if (loading) {
-    return <div className="text-center py-12">Đang tải...</div>;
+  if (loading && !statsCache) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <div className="h-9 bg-gray-200 rounded w-48 animate-pulse"></div>
+          <div className="h-10 bg-gray-200 rounded w-32 animate-pulse"></div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <SkeletonLoader type="card" count={6} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <SkeletonLoader type="widget" count={2} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <SkeletonLoader type="widget" count={2} />
+        </div>
+
+        <SkeletonLoader type="chart" />
+      </div>
+    );
   }
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    setChartLoading(true);
+    await Promise.all([
+      fetchStats(true),
+      fetchChartData(true),
+    ]);
+    showToast("Đã làm mới dữ liệu", "success");
+  };
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+        <button
+          onClick={handleRefresh}
+          disabled={loading || chartLoading}
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <RefreshCw size={18} className={loading || chartLoading ? "animate-spin" : ""} />
+          <span>Làm mới</span>
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {statCards.map((card, index) => {
@@ -285,9 +373,16 @@ const Dashboard = () => {
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          Biểu đồ thống kê
-        </h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">
+            Biểu đồ thống kê
+          </h2>
+          {chartCache[`${activeTab}-${new Date().toISOString().split("T")[0]}`] && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              📦 Cached
+            </span>
+          )}
+        </div>
 
         <div className="border-b border-gray-200 mb-4">
           <nav className="flex space-x-4">
@@ -308,14 +403,25 @@ const Dashboard = () => {
         </div>
 
         {chartLoading ? (
-          <div className="text-center py-12">Đang tải dữ liệu...</div>
+          <LoadingSpinner size="large" message="Đang tải dữ liệu biểu đồ..." />
         ) : chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
+              <YAxis 
+                tickFormatter={(value) => new Intl.NumberFormat("vi-VN", { notation: "compact" }).format(value)}
+              />
+              <Tooltip 
+                formatter={(value, name) => {
+                  if (name === "Doanh thu (đ)") {
+                    return [new Intl.NumberFormat("vi-VN").format(value) + " ₫", name];
+                  }
+                  return [value, name];
+                }}
+                labelStyle={{ color: "#374151", fontWeight: "bold" }}
+                contentStyle={{ backgroundColor: "#fff", border: "1px solid #e5e7eb", borderRadius: "8px" }}
+              />
               <Legend />
               <Bar dataKey="doanh_thu" fill="#3b82f6" name="Doanh thu (đ)" />
               <Bar dataKey="hóa_đơn" fill="#10b981" name="Số hóa đơn" />

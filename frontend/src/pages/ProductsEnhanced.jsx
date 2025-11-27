@@ -16,6 +16,8 @@ import { productsAPI, categoriesAPI } from "../services/api";
 import { useToast } from "../contexts/ToastContext";
 import ProductDetailModal from "../components/ProductDetailModal";
 import SearchableSelect from "../components/SearchableSelect";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
 
 const ProductsEnhanced = () => {
   const { showToast } = useToast();
@@ -426,7 +428,40 @@ const ProductsEnhanced = () => {
   }, [showModal, showDetailModal]);
 
   if (loading && allProducts.length === 0) {
-    return <div className="text-center py-12">Đang tải...</div>;
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <div className="h-9 bg-gray-200 rounded w-64 animate-pulse"></div>
+          <div className="h-10 bg-gray-200 rounded w-40 animate-pulse"></div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 mb-4 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-32 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {["Tên sản phẩm", "Giá", "Tồn kho", "Sizes", "Thương hiệu", "Thao tác"].map((header, i) => (
+                  <th key={i} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              <SkeletonLoader type="table-row" count={10} />
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -485,7 +520,7 @@ const ProductsEnhanced = () => {
               <option value="">Tất cả</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.name}
+                  {cat.name} {cat.product_count > 0 ? `(${cat.product_count})` : ''}
                 </option>
               ))}
             </select>
@@ -836,6 +871,19 @@ const ProductsEnhanced = () => {
                   placeholder="Chọn danh mục"
                   searchPlaceholder="Tìm danh mục..."
                   required
+                  renderOption={(cat) => (
+                    <div className="flex justify-between items-center">
+                      <span>{cat.name}</span>
+                      {cat.product_count > 0 && (
+                        <span className="text-xs text-gray-500 ml-2">
+                          ({cat.product_count})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  getOptionLabel={(cat) => 
+                    cat.product_count > 0 ? `${cat.name} (${cat.product_count})` : cat.name
+                  }
                 />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
