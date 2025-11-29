@@ -101,7 +101,7 @@ const SalesInvoices = () => {
     fetchInvoices();
   }, [currentPage, itemsPerPage]);
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = async (forceRefresh = false) => {
     try {
       // Tạo cache key
       const cacheKey = JSON.stringify({
@@ -110,8 +110,8 @@ const SalesInvoices = () => {
         filters: filters,
       });
 
-      // Kiểm tra cache
-      if (pageCache[cacheKey]) {
+      // Kiểm tra cache (skip nếu forceRefresh)
+      if (!forceRefresh && pageCache[cacheKey]) {
         const cached = pageCache[cacheKey];
         setInvoices(cached.invoices);
         setTotalPages(cached.totalPages);
@@ -324,7 +324,10 @@ const SalesInvoices = () => {
       
       // Xóa cache vì dữ liệu đã thay đổi
       setPageCache({});
-      await fetchInvoices();
+      // Reset về trang 1 để thấy hóa đơn mới
+      setCurrentPage(1);
+      // Force refresh để bỏ qua cache
+      await fetchInvoices(true);
       await fetchProducts();
     } catch (error) {
       showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");

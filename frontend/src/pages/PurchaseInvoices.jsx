@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Trash2, Eye, X } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Trash2, Eye, X, ChevronDown, ChevronUp } from "lucide-react";
 import {
   purchaseInvoicesAPI,
   suppliersAPI,
@@ -14,6 +14,8 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import SearchableSelect from "../components/SearchableSelect";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SkeletonLoader from "../components/SkeletonLoader";
+import ProductTabsInvoice from "../components/ProductTabsInvoice";
+import GroupedProductVariants from "../components/GroupedProductVariants";
 
 const PurchaseInvoices = () => {
   const { showToast } = useToast();
@@ -63,6 +65,9 @@ const PurchaseInvoices = () => {
 
   // Cache cho pagination
   const [pageCache, setPageCache] = useState({});
+
+  // Accordion state - track which dates are expanded
+  const [expandedDates, setExpandedDates] = useState({});
 
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
@@ -194,7 +199,7 @@ const PurchaseInvoices = () => {
     reader.readAsDataURL(file);
   };
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = async (forceRefresh = false) => {
     try {
       // Tạo cache key
       const cacheKey = JSON.stringify({
@@ -203,8 +208,8 @@ const PurchaseInvoices = () => {
         filters: filters,
       });
 
-      // Kiểm tra cache
-      if (pageCache[cacheKey]) {
+      // Kiểm tra cache (skip nếu forceRefresh)
+      if (!forceRefresh && pageCache[cacheKey]) {
         const cached = pageCache[cacheKey];
         setInvoices(cached.invoices);
         setTotalPages(cached.totalPages);
@@ -629,7 +634,10 @@ const PurchaseInvoices = () => {
     
     // Xóa cache vì dữ liệu đã thay đổi
     setPageCache({});
-    fetchInvoices();
+    // Reset về trang 1 để thấy hóa đơn mới
+    setCurrentPage(1);
+    // Force refresh để bỏ qua cache
+    await fetchInvoices(true);
     window.dispatchEvent(new Event("products-updated"));
 
     // Hiển thị kết quả
@@ -650,7 +658,11 @@ const PurchaseInvoices = () => {
     try {
       await purchaseInvoicesAPI.delete(id);
       showToast("Xóa hóa đơn nhập thành công!", "success");
-      fetchInvoices();
+      
+      // Xóa cache vì dữ liệu đã thay đổi
+      setPageCache({});
+      // Force refresh để bỏ qua cache
+      await fetchInvoices(true);
     } catch (error) {
       showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
     }
@@ -687,6 +699,49 @@ const PurchaseInvoices = () => {
       matchesDateTo
     );
   });
+
+  // Gom nhóm hóa đơn theo ngày
+  const groupedInvoices = useMemo(() => {
+    const groups = {};
+    
+    filteredInvoices.forEach((invoice) => {
+      const dateKey = new Date(invoice.invoice_date).toLocaleDateString("vi-VN");
+      
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          date: dateKey,
+          invoices: [],
+          totalCost: 0,
+          totalProducts: 0,
+        };
+      }
+      
+      groups[dateKey].invoices.push(invoice);
+      groups[dateKey].totalCost += parseFloat(invoice.total_cost) || 0;
+      
+      // Đếm tổng số sản phẩm (từ items nếu có)
+      if (invoice.items && Array.isArray(invoice.items)) {
+        groups[dateKey].totalProducts += invoice.items.reduce((sum, item) => {
+          return sum + (parseInt(item.quantity) || 0);
+        }, 0);
+      }
+    });
+    
+    // Chuyển object thành array và sắp xếp theo ngày giảm dần
+    return Object.values(groups).sort((a, b) => {
+      const dateA = a.date.split("/").reverse().join("-");
+      const dateB = b.date.split("/").reverse().join("-");
+      return dateB.localeCompare(dateA);
+    });
+  }, [filteredInvoices]);
+
+  // Toggle accordion
+  const toggleDate = (dateKey) => {
+    setExpandedDates((prev) => ({
+      ...prev,
+      [dateKey]: !prev[dateKey],
+    }));
+  };
 
   const handleCloseModal = () => {
     if (isDirty) {
@@ -911,68 +966,117 @@ const PurchaseInvoices = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Số hóa đơn
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Nhà cung cấp
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Ngày
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Ngày cập nhật
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Tổng tiền
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Thao tác
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredInvoices.map((invoice) => (
-              <tr key={invoice.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {invoice.invoice_number}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {invoice.supplier_name || "-"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(invoice.invoice_date).toLocaleDateString("vi-VN")}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {invoice.updated_at
-                    ? new Date(invoice.updated_at).toLocaleDateString("vi-VN")
-                    : "-"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {new Intl.NumberFormat("vi-VN").format(invoice.total_cost)} đ
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleViewDetail(invoice.id)}
-                    className="text-blue-600 hover:text-blue-900 mr-4"
-                  >
-                    <Eye size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(invoice.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-4">
+        {groupedInvoices.map((group) => {
+          const isExpanded = expandedDates[group.date];
+          
+          return (
+            <div key={group.date} className="bg-white rounded-lg shadow overflow-hidden">
+              {/* Accordion Header */}
+              <button
+                onClick={() => toggleDate(group.date)}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-full">
+                    {isExpanded ? (
+                      <ChevronUp size={20} className="text-blue-600" />
+                    ) : (
+                      <ChevronDown size={20} className="text-blue-600" />
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Ngày {group.date}
+                    </h3>
+                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
+                      <span className="flex items-center">
+                        <span className="font-medium text-blue-600">{group.invoices.length}</span>
+                        <span className="ml-1">hóa đơn</span>
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span className="flex items-center">
+                        <span className="font-medium text-green-600">
+                          {new Intl.NumberFormat("vi-VN").format(group.totalCost)} ₫
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">
+                  {isExpanded ? "Thu gọn" : "Xem chi tiết"}
+                </div>
+              </button>
+
+              {/* Accordion Content */}
+              {isExpanded && (
+                <div className="border-t border-gray-200">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Số hóa đơn
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Nhà cung cấp
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Ngày
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Ngày cập nhật
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Tổng tiền
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Thao tác
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {group.invoices.map((invoice) => (
+                        <tr key={invoice.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {invoice.invoice_number}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {invoice.supplier_name || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(invoice.invoice_date).toLocaleDateString("vi-VN")}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {invoice.updated_at
+                              ? new Date(invoice.updated_at).toLocaleDateString("vi-VN")
+                              : "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {new Intl.NumberFormat("vi-VN").format(invoice.total_cost)} đ
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => handleViewDetail(invoice.id)}
+                              className="text-blue-600 hover:text-blue-900 mr-4"
+                            >
+                              <Eye size={18} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(invoice.id)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Pagination */}
@@ -1158,319 +1262,23 @@ const PurchaseInvoices = () => {
                     />
                   </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
+                 <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-3">
                         Sản phẩm *
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => handleAddItem(tabIndex)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        + Thêm sản phẩm
-                      </button>
-                    </div>
-                    {tab.data.items.map((item, index) => (
-                      <div
-                        key={index}
-                        className="border border-gray-200 rounded-lg p-4 mb-3"
-                      >
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-sm font-medium text-gray-700">
-                            Sản phẩm {index + 1}
-                          </span>
-                          {tab.data.items.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(tabIndex, index)}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Xóa sản phẩm
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Thông tin chung của sản phẩm */}
-                        <div className="grid grid-cols-2 gap-3 mb-4">
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">
-                              Chọn sản phẩm có sẵn (hoặc để trống để tạo mới)
-                            </label>
-                            <select
-                              value={item.product_id}
-                              onChange={(e) =>
-                                handleItemChange(
-                                  tabIndex,
-                                  index,
-                                  "product_id",
-                                  e.target.value
-                                )
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                            >
-                              <option value="">-- Tạo sản phẩm mới --</option>
-                              {Array.isArray(products) &&
-                                products.map((product) => (
-                                  <option key={product.id} value={product.id}>
-                                    {product.name} - Size:{" "}
-                                    {product.size || "N/A"}
-                                  </option>
-                                ))}
-                            </select>
-                          </div>
-                          {!item.product_id && (
-                            <>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  Tên sản phẩm *
-                                </label>
-                                <input
-                                  type="text"
-                                  required={!item.product_id}
-                                  value={item.name}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      tabIndex,
-                                      index,
-                                      "name",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  Danh mục *
-                                </label>
-                                <select
-                                  required={!item.product_id}
-                                  value={item.category_id}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      tabIndex,
-                                      index,
-                                      "category_id",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                >
-                                  <option value="">Chọn danh mục</option>
-                                  {categories.map((cat) => (
-                                    <option key={cat.id} value={cat.id}>
-                                      {cat.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  Giá bán *
-                                </label>
-                                <input
-                                  type="number"
-                                  required={!item.product_id}
-                                  value={item.price}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      tabIndex,
-                                      index,
-                                      "price",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  Thương hiệu
-                                </label>
-                                <input
-                                  type="text"
-                                  value={item.brand || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      tabIndex,
-                                      index,
-                                      "brand",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  Màu sắc
-                                </label>
-                                <input
-                                  type="text"
-                                  value={item.color || ""}
-                                  onChange={(e) =>
-                                    handleItemChange(
-                                      tabIndex,
-                                      index,
-                                      "color",
-                                      e.target.value
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  Hình ảnh sản phẩm
-                                </label>
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) =>
-                                      handleImageFileChange(
-                                        tabIndex,
-                                        index,
-                                        e.target.files?.[0] || null
-                                      )
-                                    }
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                  />
-                                  {item.image_url && (
-                                    <img
-                                      src={item.image_url}
-                                      alt="Preview"
-                                      className="w-12 h-12 object-cover rounded border"
-                                    />
-                                  )}
-                                </div>
-                                <p className="mt-1 text-[11px] text-gray-500">
-                                  Ảnh sẽ được lưu dưới dạng dữ liệu base64 trong
-                                  hệ thống.
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Variants (nhiều size) */}
-                        <div className="border-t pt-3">
-                          <div className="flex justify-between items-center mb-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              Biến thể (Size) *
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => handleAddVariant(tabIndex, index)}
-                              className="text-blue-600 hover:text-blue-800 text-sm"
-                            >
-                              + Thêm size
-                            </button>
-                          </div>
-
-                          {/* Size Generator */}
-                          <SizeGenerator
-                            onGenerate={(variants) => {
-                              const newTabs = [...tabs];
-                              // variants đã có cấu trúc {size, quantity, unit_cost}
-                              newTabs[tabIndex].data.items[index].variants = variants;
-                              setTabs(newTabs);
-                            }}
-                          />
-                          {item.variants &&
-                            item.variants.map((variant, variantIndex) => (
-                              <div
-                                key={variantIndex}
-                                className="grid grid-cols-3 gap-3 mb-2 p-2 bg-gray-50 rounded"
-                              >
-                                <div>
-                                  <label className="block text-xs text-gray-600 mb-1">
-                                    Size *
-                                  </label>
-                                  <input
-                                    type="text"
-                                    required
-                                    value={variant.size}
-                                    onChange={(e) =>
-                                      handleVariantChange(
-                                        tabIndex,
-                                        index,
-                                        variantIndex,
-                                        "size",
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder="VD: 36, 37, 38"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-gray-600 mb-1">
-                                    Số lượng *
-                                  </label>
-                                  <input
-                                    type="number"
-                                    required
-                                    min="1"
-                                    value={variant.quantity}
-                                    onChange={(e) =>
-                                      handleVariantChange(
-                                        tabIndex,
-                                        index,
-                                        variantIndex,
-                                        "quantity",
-                                        e.target.value
-                                      )
-                                    }
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                  />
-                                </div>
-                                <div className="flex items-end gap-2">
-                                  <div className="flex-1">
-                                    <label className="block text-xs text-gray-600 mb-1">
-                                      Giá nhập (đơn vị) *
-                                    </label>
-                                    <input
-                                      type="number"
-                                      required
-                                      min="0"
-                                      step="0.01"
-                                      value={variant.unit_cost}
-                                      onChange={(e) =>
-                                        handleVariantChange(
-                                          tabIndex,
-                                          index,
-                                          variantIndex,
-                                          "unit_cost",
-                                          e.target.value
-                                        )
-                                      }
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                                    />
-                                  </div>
-                                  {item.variants.length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleRemoveVariant(
-                                          tabIndex,
-                                          index,
-                                          variantIndex
-                                        )
-                                      }
-                                      className="text-red-600 hover:text-red-800 text-sm px-2 py-2"
-                                      title="Xóa size"
-                                    >
-                                      X
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    ))}
+                      <ProductTabsInvoice
+                        items={tab.data.items}
+                        tabIndex={tabIndex}
+                        products={products}
+                        categories={categories}
+                        handleItemChange={handleItemChange}
+                        handleImageFileChange={handleImageFileChange}
+                        handleAddVariant={handleAddVariant}
+                        handleRemoveVariant={handleRemoveVariant}
+                        handleVariantChange={handleVariantChange}
+                        tabs={tabs}
+                        setTabs={setTabs}
+                      />
                   </div>
 
                   <div className="flex justify-between items-center pt-4">
@@ -1592,53 +1400,12 @@ const PurchaseInvoices = () => {
 
               {selectedInvoice.items && selectedInvoice.items.length > 0 && (
                 <div>
-                  <h3 className="font-medium mb-2">Chi tiết sản phẩm</h3>
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                          Sản phẩm
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                          Size
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                          SL
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                          Đơn giá
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
-                          Thành tiền
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {selectedInvoice.items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="px-4 py-2 text-sm">
-                            {item.product_name}
-                          </td>
-                          <td className="px-4 py-2 text-sm">
-                            {item.size_eu || "-"}
-                          </td>
-                          <td className="px-4 py-2 text-sm">{item.quantity}</td>
-                          <td className="px-4 py-2 text-sm">
-                            {new Intl.NumberFormat("vi-VN").format(
-                              item.unit_cost
-                            )}{" "}
-                            đ
-                          </td>
-                          <td className="px-4 py-2 text-sm font-medium">
-                            {new Intl.NumberFormat("vi-VN").format(
-                              item.total_cost
-                            )}{" "}
-                            đ
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                 <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Chi tiết sản phẩm
+                    </h3>
+                    <GroupedProductVariants items={selectedInvoice.items} />
+                 </div>
                 </div>
               )}
             </div>

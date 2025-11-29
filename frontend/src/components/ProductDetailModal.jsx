@@ -16,17 +16,22 @@ const ProductDetailModal = ({ product, onClose }) => {
 
   const fetchProductSizes = async () => {
     try {
-      const response = await productsAPI.search({ query: product.name });
-      const products = response.data?.products || response.data || [];
+      // Use getAll instead of search to avoid 500 error
+      const response = await productsAPI.getAll({ limit: 1000 });
+      const allProducts = response.data?.products || response.data || [];
+      
+      // Filter products by name
+      const products = allProducts.filter((p) => p.name === product.name);
+      
       setSizes(
         products
-          .filter((p) => p.name === product.name)
           .map((p) => ({
             id: p.id,
-            size: p.size,
+            size: p.size_eu || p.size || p.Size, // Try multiple field names
             stock_quantity: p.stock_quantity,
             price: p.price,
           }))
+          .filter((p) => p.size) // Remove items without size
           .sort((a, b) => {
             const sizeA = parseFloat(a.size) || 0;
             const sizeB = parseFloat(b.size) || 0;
