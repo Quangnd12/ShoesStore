@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import SizeGenerator from "./SizeGenerator";
+import GroupedSearchableSelect from "./GroupedSearchableSelect";
+import SearchableSelect from "./SearchableSelect";
 
 const ProductTabsInvoice = ({ 
   items, 
@@ -56,7 +58,7 @@ const ProductTabsInvoice = ({
     <div className="space-y-4">
       {/* Product Tabs Header */}
       <div className="border-b border-gray-300">
-        <div className="flex items-center space-x-2 overflow-x-auto pb-2 scrollbar-thin">
+        <div className="flex flex-wrap items-center gap-2 pb-2">
           {items.map((item, index) => {
             const productName = item.product_id 
               ? products.find(p => p.id === parseInt(item.product_id))?.name 
@@ -69,11 +71,11 @@ const ProductTabsInvoice = ({
                 type="button"
                 onClick={() => setActiveProductIndex(index)}
                 className={`
-                  flex items-center space-x-2 px-4 py-2.5 rounded-t-lg border-b-3 transition-all whitespace-nowrap min-w-fit
+                  flex items-center space-x-2 px-4 py-2.5 rounded-lg transition-all whitespace-nowrap
                   ${
                     activeProductIndex === index
-                      ? "bg-blue-600 text-white font-semibold shadow-md border-blue-600"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 border-transparent"
+                      ? "bg-blue-600 text-white font-semibold shadow-md"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }
                 `}
               >
@@ -98,7 +100,7 @@ const ProductTabsInvoice = ({
           <button
             type="button"
             onClick={handleAddProduct}
-            className="flex items-center space-x-1 px-4 py-2.5 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition-all border-2 border-dashed border-blue-400 hover:border-blue-600 font-medium"
+            className="flex items-center space-x-1 px-4 py-2.5 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition-all border-2 border-dashed border-blue-400 hover:border-blue-600 font-medium whitespace-nowrap"
           >
             <Plus size={16} />
             <span className="text-sm">Thêm sản phẩm</span>
@@ -114,21 +116,18 @@ const ProductTabsInvoice = ({
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Chọn sản phẩm có sẵn (hoặc để trống để tạo mới)
             </label>
-            <select
-              value={currentItem.product_id}
-              onChange={(e) =>
-                handleItemChange(tabIndex, itemIndex, "product_id", e.target.value)
-              }
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-            >
-              <option value="">-- Tạo sản phẩm mới --</option>
-              {Array.isArray(products) &&
-                products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name} - Size: {product.size || "N/A"}
-                  </option>
-                ))}
-            </select>
+            <GroupedSearchableSelect
+              products={Array.isArray(products) ? products : []}
+              value={currentItem.product_id ? parseInt(currentItem.product_id) : null}
+              onChange={(product) => {
+                if (product) {
+                  handleItemChange(tabIndex, itemIndex, "product_id", product.id.toString());
+                } else {
+                  handleItemChange(tabIndex, itemIndex, "product_id", "");
+                }
+              }}
+              placeholder="-- Tạo sản phẩm mới --"
+            />
           </div>
           
           {!currentItem.product_id && (
@@ -152,21 +151,15 @@ const ProductTabsInvoice = ({
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Danh mục *
                 </label>
-                <select
-                  required={!currentItem.product_id}
+                <SearchableSelect
+                  options={categories}
                   value={currentItem.category_id}
-                  onChange={(e) =>
-                    handleItemChange(tabIndex, itemIndex, "category_id", e.target.value)
-                  }
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-                >
-                  <option value="">Chọn danh mục</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleItemChange(tabIndex, itemIndex, "category_id", value)}
+                  placeholder="Chọn danh mục"
+                  emptyText="Không tìm thấy danh mục"
+                  labelKey="name"
+                  valueKey="id"
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">

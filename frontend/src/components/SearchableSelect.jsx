@@ -1,52 +1,57 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, ChevronDown, X } from "lucide-react";
 
-const SearchableSelect = ({
-  options = [],
-  value,
-  onChange,
+const SearchableSelect = ({ 
+  options = [], 
+  value, 
+  onChange, 
   placeholder = "Chọn...",
-  searchPlaceholder = "Tìm kiếm...",
+  emptyText = "Không tìm thấy kết quả",
+  emptyMessage, // Alias for emptyText
+  labelKey = "name",
+  valueKey = "id",
+  // New props for backward compatibility
+  getOptionLabel,
+  getOptionValue,
+  searchPlaceholder,
   label,
-  required = false,
-  disabled = false,
-  className = "",
-  getOptionLabel = (option) => option.name || option.label || String(option),
-  getOptionValue = (option) => option.id || option.value || option,
-  renderOption,
-  emptyMessage = "Không tìm thấy kết quả",
+  required,
+  className
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const containerRef = useRef(null);
+  const dropdownRef = useRef(null);
   const searchInputRef = useRef(null);
 
-  // Tìm option được chọn
-  const selectedOption = options.find(
-    (opt) => String(getOptionValue(opt)) === String(value)
-  );
+  // Helper functions with backward compatibility
+  const getLabel = (option) => {
+    if (getOptionLabel) return getOptionLabel(option);
+    return option[labelKey] || "";
+  };
 
-  // Lọc options dựa trên search term
-  const filteredOptions = options.filter((option) => {
-    const label = getOptionLabel(option).toLowerCase();
-    const search = searchTerm.toLowerCase();
-    return label.includes(search);
+  const getValue = (option) => {
+    if (getOptionValue) return getOptionValue(option);
+    return option[valueKey];
+  };
+
+  // Lọc options theo từ khóa tìm kiếm
+  const filteredOptions = options.filter(option => {
+    const label = getLabel(option);
+    return label.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   // Đóng dropdown khi click bên ngoài
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsOpen(false);
-        setSearchTerm("");
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Focus vào search input khi mở dropdown
+  // Focus vào ô tìm kiếm khi mở dropdown
   useEffect(() => {
     if (isOpen && searchInputRef.current) {
       searchInputRef.current.focus();
@@ -54,7 +59,7 @@ const SearchableSelect = ({
   }, [isOpen]);
 
   const handleSelect = (option) => {
-    onChange(getOptionValue(option));
+    onChange(getValue(option));
     setIsOpen(false);
     setSearchTerm("");
   };
@@ -62,106 +67,98 @@ const SearchableSelect = ({
   const handleClear = (e) => {
     e.stopPropagation();
     onChange("");
-    setSearchTerm("");
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Escape") {
-      setIsOpen(false);
-      setSearchTerm("");
-    }
-  };
+  // Tìm option đã chọn
+  const selectedOption = options.find(opt => {
+    const optValue = getValue(opt);
+    return optValue === value || optValue === parseInt(value);
+  });
+  const displayText = selectedOption ? getLabel(selectedOption) : placeholder;
+
+  const finalEmptyText = emptyMessage || emptyText;
+  const finalSearchPlaceholder = searchPlaceholder || "Tìm kiếm...";
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div className={`relative ${className || ""}`} ref={dropdownRef}>
+      {/* Label */}
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-xs text-gray-600 mb-1">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
 
-      {/* Select Button */}
-      <button
-        type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
-        className={`
-          w-full px-4 py-2 text-left border rounded-lg
-          flex items-center justify-between
-          transition-colors
-          ${disabled ? "bg-gray-100 cursor-not-allowed" : "bg-white hover:border-blue-400"}
-          ${isOpen ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-300"}
-          focus:outline-none focus:ring-2 focus:ring-blue-500
-        `}
+      {/* Trigger Button */}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-4 py-2.5 border-2 rounded-lg cursor-pointer transition-all flex items-center justify-between ${
+          isOpen 
+            ? "border-blue-500 ring-2 ring-blue-200" 
+            : "border-gray-300 hover:border-gray-400"
+        }`}
       >
-        <span className={selectedOption ? "text-gray-900" : "text-gray-400"}>
-          {selectedOption ? getOptionLabel(selectedOption) : placeholder}
+        <span className={`text-sm ${!selectedOption ? "text-gray-400" : "text-gray-700"}`}>
+          {displayText}
         </span>
-        <div className="flex items-center space-x-1">
-          {value && !disabled && (
-            <X
-              size={16}
-              className="text-gray-400 hover:text-gray-600"
+        <div className="flex items-center gap-2">
+          {selectedOption && (
+            <button
               onClick={handleClear}
-            />
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={16} />
+            </button>
           )}
-          <ChevronDown
-            size={18}
-            className={`text-gray-400 transition-transform ${
-              isOpen ? "transform rotate-180" : ""
-            }`}
+          <ChevronDown 
+            size={18} 
+            className={`text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
           />
         </div>
-      </button>
+      </div>
 
-      {/* Dropdown */}
+      {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-hidden">
-          {/* Search Input */}
-          <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
+        <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-300 rounded-lg shadow-xl max-h-80 overflow-hidden">
+          {/* Search Box */}
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-3">
             <div className="relative">
-              <Search
-                size={18}
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-              />
+              <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={searchPlaceholder}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                placeholder={finalSearchPlaceholder}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
               />
             </div>
           </div>
 
           {/* Options List */}
-          <div className="max-h-60 overflow-y-auto">
-            {filteredOptions.length === 0 ? (
-              <div className="px-4 py-3 text-sm text-gray-500 text-center">
-                {emptyMessage}
-              </div>
-            ) : (
+          <div className="overflow-y-auto max-h-64">
+            {filteredOptions.length > 0 ? (
               filteredOptions.map((option, index) => {
-                const optionValue = getOptionValue(option);
-                const isSelected = String(optionValue) === String(value);
-
+                const optValue = getValue(option);
+                const isSelected = value === optValue || value === optValue?.toString();
+                
                 return (
-                  <button
-                    key={index}
-                    type="button"
+                  <div
+                    key={optValue || index}
                     onClick={() => handleSelect(option)}
-                    className={`
-                      w-full px-4 py-2 text-left text-sm
-                      hover:bg-blue-50 transition-colors
-                      ${isSelected ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-700"}
-                    `}
+                    className={`px-4 py-2.5 hover:bg-blue-50 cursor-pointer transition-colors ${
+                      isSelected
+                        ? "bg-blue-100 border-l-4 border-blue-600 font-medium" 
+                        : ""
+                    }`}
                   >
-                    {renderOption ? renderOption(option) : getOptionLabel(option)}
-                  </button>
+                    <span className="text-sm text-gray-700">{getLabel(option)}</span>
+                  </div>
                 );
               })
+            ) : (
+              <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                {finalEmptyText}
+              </div>
             )}
           </div>
         </div>

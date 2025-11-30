@@ -1476,6 +1476,9 @@ const SalesInvoices = () => {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                          Hình ảnh
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
                           Sản phẩm
                         </th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
@@ -1495,6 +1498,19 @@ const SalesInvoices = () => {
                     <tbody className="bg-white divide-y divide-gray-200">
                       {selectedInvoice.items.map((item, idx) => (
                         <tr key={idx}>
+                          <td className="px-4 py-2">
+                            {item.image_url ? (
+                              <img
+                                src={item.image_url}
+                                alt={item.product_name}
+                                className="w-12 h-12 object-cover rounded border border-gray-200"
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                                <span className="text-gray-400 text-xs">N/A</span>
+                              </div>
+                            )}
+                          </td>
                           <td className="px-4 py-2 text-sm">
                             {item.product_name}
                           </td>

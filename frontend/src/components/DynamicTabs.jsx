@@ -34,35 +34,41 @@ const DynamicTabs = ({ tabs, onTabChange, onTabClose, onAddTab, renderTabContent
 
   return (
     <div>
-      <div className="flex items-center border-b border-gray-200 mb-4 overflow-x-auto">
-        {tabs.map((tab, index) => (
-          <div
-            key={index}
-            className={`flex items-center px-4 py-2 border-b-2 cursor-pointer transition ${
-              activeTab === index
-                ? "border-blue-600 text-blue-600 bg-blue-50"
-                : "border-transparent text-gray-600 hover:text-gray-800"
-            }`}
-            onClick={() => handleTabClick(index)}
+      <div className="border-b border-gray-200 mb-4">
+        <div className="flex flex-wrap items-center gap-2 pb-2">
+          {tabs.map((tab, index) => (
+            <div
+              key={index}
+              className={`flex items-center px-4 py-2 rounded-t-lg cursor-pointer transition whitespace-nowrap ${
+                activeTab === index
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+              onClick={() => handleTabClick(index)}
+            >
+              <span className="mr-2 text-sm font-medium">{tab.label}</span>
+              {tabs.length > 1 && (
+                <button
+                  onClick={(e) => handleTabClose(index, e)}
+                  className={`ml-2 transition ${
+                    activeTab === index
+                      ? "text-white hover:text-gray-200"
+                      : "text-gray-400 hover:text-gray-600"
+                  }`}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={handleAddTab}
+            className="px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition flex items-center border border-blue-300 hover:border-blue-500"
           >
-            <span className="mr-2 text-sm font-medium">{tab.label}</span>
-            {tabs.length > 1 && (
-              <button
-                onClick={(e) => handleTabClose(index, e)}
-                className="ml-2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          onClick={handleAddTab}
-          className="ml-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded transition flex items-center"
-        >
-          <Plus size={18} className="mr-1" />
-          <span className="text-sm">Thêm</span>
-        </button>
+            <Plus size={18} className="mr-1" />
+            <span className="text-sm">Thêm</span>
+          </button>
+        </div>
       </div>
       <div>
         {tabs[activeTab] ? (

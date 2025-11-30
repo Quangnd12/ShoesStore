@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, Eye, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, Eye, X, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import {
   purchaseInvoicesAPI,
   suppliersAPI,
@@ -869,16 +869,31 @@ const PurchaseInvoices = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Hóa đơn nhập hàng</h1>
-        <button
-          onClick={async () => {
-            await resetAllTabs();
-            setShowModal(true);
-          }}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          <Plus size={20} />
-          <span>Thêm hóa đơn nhập</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={async () => {
+              setLoading(true);
+              setPageCache({});
+              await fetchInvoices(true);
+              showToast("Đã làm mới danh sách hóa đơn", "success");
+            }}
+            className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition"
+            title="Làm mới danh sách"
+          >
+            <RefreshCw size={20} />
+            <span>Làm mới</span>
+          </button>
+          <button
+            onClick={async () => {
+              await resetAllTabs();
+              setShowModal(true);
+            }}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            <Plus size={20} />
+            <span>Thêm hóa đơn nhập</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-4 mb-4">
