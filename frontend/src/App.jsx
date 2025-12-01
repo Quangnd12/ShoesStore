@@ -5,6 +5,7 @@ import ProductsEnhanced from "./pages/ProductsEnhanced";
 import Suppliers from "./pages/Suppliers";
 import PurchaseInvoices from "./pages/PurchaseInvoices";
 import SalesInvoices from "./pages/SalesInvoices";
+import QuickCheckout from "./pages/QuickCheckout";
 import Login from "./pages/Login";
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="suppliers" element={<Suppliers />} />
           <Route path="purchase-invoices" element={<PurchaseInvoices />} />
           <Route path="sales-invoices" element={<SalesInvoices />} />
+          <Route path="quick-checkout" element={<QuickCheckout />} />
         </Route>
       </Routes>
     </Router>

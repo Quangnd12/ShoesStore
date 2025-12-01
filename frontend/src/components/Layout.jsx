@@ -5,6 +5,7 @@ import {
   Truck, 
   FileText, 
   ShoppingCart,
+  Zap,
   LogOut,
   Menu,
   X
@@ -19,6 +20,7 @@ const Layout = () => {
 
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/quick-checkout', label: 'Thanh toán nhanh', icon: Zap },
     { path: '/products', label: 'Sản phẩm', icon: Package },
     { path: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
     { path: '/purchase-invoices', label: 'Hóa đơn nhập', icon: FileText },

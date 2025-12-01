@@ -26,3 +26,44 @@ body {
   animation: slide-in 0.3s ease-out;
 }
 
+
+/* Print Styles for Invoice */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #invoice-print,
+  #invoice-print * {
+    visibility: visible;
+  }
+  
+  #invoice-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  @page {
+    margin: 1cm;
+  }
+}
+
+/* Drag and Drop Animations */
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: rgb(59, 130, 246);
+  }
+  50% {
+    border-color: rgb(147, 197, 253);
+  }
+}
+
+.dragging-over {
+  animation: pulse-border 1s ease-in-out infinite;
+}
