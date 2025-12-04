@@ -59,7 +59,7 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
               <div className="flex items-center gap-2 mt-1">
                 {item.size && (
                   <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                    {item.size}
+                   Size: {item.size}
                   </span>
                 )}
                 

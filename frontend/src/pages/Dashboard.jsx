@@ -280,7 +280,6 @@ const Dashboard = () => {
 
   const tabs = [
     { id: "day", label: "Ngày" },
-    { id: "week", label: "Tuần" },
     { id: "month", label: "Tháng" },
     { id: "year", label: "Năm" },
   ];

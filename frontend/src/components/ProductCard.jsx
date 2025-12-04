@@ -39,7 +39,7 @@ const ProductCard = ({ product, onDragStart, onAddToCart, isInCart }) => {
               ? "bg-orange-100 text-orange-700" 
               : "bg-green-100 text-green-700"
           }`}>
-            {product.stock_quantity}
+            SL: {product.stock_quantity}
           </span>
         </div>
       </div>
@@ -53,7 +53,7 @@ const ProductCard = ({ product, onDragStart, onAddToCart, isInCart }) => {
         <div className="flex items-center justify-between">
           {product.size && (
             <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-semibold">
-              {product.size}
+             Size: {product.size}
             </span>
           )}
           <span className="text-sm font-bold text-gray-900">
