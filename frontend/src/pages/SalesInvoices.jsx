@@ -586,11 +586,26 @@ const SalesInvoices = () => {
       groups[dateKey].totalProducts += parseInt(invoice.total_quantity) || 0;
     });
     
+    // Sắp xếp các hóa đơn trong mỗi nhóm theo thời gian tạo giảm dần
+    Object.values(groups).forEach(group => {
+      group.invoices.sort((a, b) => {
+        // Sắp xếp theo created_at giảm dần (hóa đơn mới nhất trước)
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        return timeB - timeA;
+      });
+    });
+
     // Chuyển object thành array và sắp xếp theo ngày giảm dần
     return Object.values(groups).sort((a, b) => {
-      const dateA = a.date.split("/").reverse().join("-");
-      const dateB = b.date.split("/").reverse().join("-");
-      return dateB.localeCompare(dateA);
+      // Chuyển đổi từ dd/mm/yyyy sang yyyy-mm-dd để so sánh chính xác
+      const [dayA, monthA, yearA] = a.date.split("/");
+      const [dayB, monthB, yearB] = b.date.split("/");
+      const dateA = new Date(yearA, monthA - 1, dayA);
+      const dateB = new Date(yearB, monthB - 1, dayB);
+      
+      // Sắp xếp giảm dần (ngày mới nhất trước)
+      return dateB.getTime() - dateA.getTime();
     });
   }, [filteredInvoices]);
 

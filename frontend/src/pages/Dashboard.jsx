@@ -34,6 +34,7 @@ import LowStockAlert from "../components/dashboard/LowStockAlert";
 import RevenueGrowth from "../components/dashboard/RevenueGrowth";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SkeletonLoader from "../components/SkeletonLoader";
+import ScrollToTopButton from "../components/ScrollToTopButton";
 
 const Dashboard = () => {
   const { showToast } = useToast();
@@ -432,6 +433,9 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+
+      {/* Scroll to Top Button */}
+      <ScrollToTopButton showAfter={200} />
     </div>
   );
 };

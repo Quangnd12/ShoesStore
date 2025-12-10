@@ -52,12 +52,12 @@ const DashboardController = {
     try {
       const [rows] = await db.execute(
         `SELECT 
-          HOUR(created_at) as hour,
+          HOUR(invoice_date) as hour,
           COUNT(*) as order_count,
           SUM(total_revenue) as revenue
         FROM sales_invoices
         WHERE DATE(invoice_date) = CURDATE()
-        GROUP BY HOUR(created_at)
+        GROUP BY HOUR(invoice_date)
         ORDER BY hour`
       );
 
