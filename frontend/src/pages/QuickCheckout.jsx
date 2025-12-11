@@ -258,7 +258,7 @@ const QuickCheckout = () => {
 
       const response = await salesInvoicesAPI.create({
         invoice_number: invoiceNumber,
-        invoice_date: new Date().toISOString().split("T")[0],
+        // Không gửi invoice_date, để backend tự tạo với thời gian hiện tại
         customer_name: customerInfo.name || null,
         customer_phone: customerInfo.phone || null,
         customer_email: customerInfo.email || null,

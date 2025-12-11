@@ -41,8 +41,8 @@ const SalesInvoice = {
         (sum, item) => sum + item.total_price,
         0
       );
-      const invoiceDate =
-        invoice_date || new Date().toISOString().split("T")[0];
+      // Sử dụng thời gian đầy đủ (bao gồm giờ phút giây)
+      const invoiceDate = invoice_date || new Date().toISOString().slice(0, 19).replace('T', ' ');
 
       const [invoiceResult] = await connection.execute(
         `INSERT INTO sales_invoices 

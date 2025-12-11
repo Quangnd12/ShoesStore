@@ -295,7 +295,7 @@ const SalesInvoices = () => {
 
       await salesInvoicesAPI.create({
         invoice_number: tabData.invoice_number,
-        invoice_date: tabData.invoice_date,
+        // Không gửi invoice_date, để backend tự tạo với thời gian hiện tại
         customer_name: tabData.customer_name || null,
         customer_phone: tabData.customer_phone || null,
         customer_email: tabData.customer_email || null,
