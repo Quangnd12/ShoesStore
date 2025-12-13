@@ -1,4 +1,5 @@
 import { Package, Plus, Check } from "lucide-react";
+import ColorDisplay from "./ColorDisplay";
 
 const ProductCard = ({ product, onDragStart, onAddToCart, isInCart }) => {
   return (
@@ -50,16 +51,39 @@ const ProductCard = ({ product, onDragStart, onAddToCart, isInCart }) => {
           {product.name}
         </h3>
         
-        <div className="flex items-center justify-between">
-          {product.size && (
-            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-semibold">
-             Size: {product.size}
-            </span>
-          )}
+        {/* Product attributes */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {product.color && (
+              <ColorDisplay 
+                color={product.color} 
+                size="sm" 
+                showLabel={false}
+                style="circle"
+              />
+            )}
+            {product.size && (
+              <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded font-semibold">
+               {product.size}
+              </span>
+            )}
+          </div>
           <span className="text-sm font-bold text-gray-900">
             {new Intl.NumberFormat("vi-VN").format(product.price)}₫
           </span>
         </div>
+        
+        {/* Color and Brand info */}
+        {(product.color || product.brand) && (
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            {product.color && (
+              <span className="capitalize">{product.color}</span>
+            )}
+            {product.brand && (
+              <span className="font-medium">{product.brand}</span>
+            )}
+          </div>
+        )}
 
         {/* Add Button */}
         <button

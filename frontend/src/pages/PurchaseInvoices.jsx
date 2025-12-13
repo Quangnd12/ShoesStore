@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Trash2, Eye, X, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Eye, X, ChevronDown, ChevronUp, RefreshCw, FileSpreadsheet } from "lucide-react";
 import {
   purchaseInvoicesAPI,
   suppliersAPI,
@@ -16,6 +16,7 @@ import LoadingSpinner from "../components/LoadingSpinner";
 import SkeletonLoader from "../components/SkeletonLoader";
 import ProductTabsInvoice from "../components/ProductTabsInvoice";
 import GroupedProductVariants from "../components/GroupedProductVariants";
+import ImportExcelModal from "../components/ImportExcelModal";
 
 const PurchaseInvoices = () => {
   const { showToast } = useToast();
@@ -26,6 +27,7 @@ const PurchaseInvoices = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [tabs, setTabs] = useState([
     {
@@ -668,6 +670,33 @@ const PurchaseInvoices = () => {
     }
   };
 
+  const handleImportExcel = async (invoicesData) => {
+    try {
+      const response = await purchaseInvoicesAPI.import(invoicesData);
+      
+      // Refresh data after import
+      setPageCache({});
+      await fetchInvoices(true);
+
+      const { success_count, error_count, errors } = response.data;
+
+      if (error_count === 0) {
+        showToast(`Import thành công ${success_count} hóa đơn!`, "success");
+      } else if (success_count === 0) {
+        const errorMessages = errors.map(err => `${err.invoice_number}: ${err.error}`).join("; ");
+        showToast(`Import thất bại: ${errorMessages}`, "error");
+      } else {
+        const errorMessages = errors.map(err => `${err.invoice_number}: ${err.error}`).join("; ");
+        showToast(
+          `Import thành công ${success_count} hóa đơn, thất bại ${error_count} hóa đơn. ${errorMessages}`,
+          "warning"
+        );
+      }
+    } catch (error) {
+      showToast("Có lỗi xảy ra khi import: " + (error.response?.data?.message || error.message), "error");
+    }
+  };
+
   const filteredInvoices = invoices.filter((invoice) => {
     const matchesInvoiceNumber = filters.invoiceNumber
       ? invoice.invoice_number
@@ -897,6 +926,13 @@ const PurchaseInvoices = () => {
           >
             <RefreshCw size={20} />
             <span>Làm mới</span>
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+          >
+            <FileSpreadsheet size={20} />
+            <span>Import Excel</span>
           </button>
           <button
             onClick={async () => {
@@ -1452,6 +1488,15 @@ const PurchaseInvoices = () => {
         confirmColor="red"
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
+      />
+
+      <ImportExcelModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={handleImportExcel}
+        suppliers={suppliers}
+        categories={categories}
+        products={products}
       />
     </div>
   );

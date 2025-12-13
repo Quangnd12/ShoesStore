@@ -58,6 +58,7 @@ export const purchaseInvoicesAPI = {
   getAll: (params) => api.get("/purchase-invoices", { params }),
   getById: (id) => api.get(`/purchase-invoices/${id}`),
   create: (data) => api.post("/purchase-invoices", data),
+  import: (invoices) => api.post("/purchase-invoices/import", { invoices }),
   delete: (id) => api.delete(`/purchase-invoices/${id}`),
   getNextInvoiceNumber: () => api.get("/purchase-invoices/next-number"),
 };

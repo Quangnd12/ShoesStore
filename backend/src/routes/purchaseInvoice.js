@@ -5,6 +5,7 @@ const { auth, isAdmin } = require("../middlewares/auth");
 
 // Admin routes
 router.post("/", auth, isAdmin, purchaseInvoiceController.createPurchaseInvoice);
+router.post("/import", auth, isAdmin, purchaseInvoiceController.importPurchaseInvoices);
 router.get("/", auth, isAdmin, purchaseInvoiceController.getAllPurchaseInvoices);
 router.get("/next-number", auth, isAdmin, purchaseInvoiceController.getNextInvoiceNumber);
 router.get("/:id", auth, purchaseInvoiceController.getPurchaseInvoiceById);

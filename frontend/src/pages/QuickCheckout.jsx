@@ -779,11 +779,18 @@ const PrintInvoiceModal = ({ invoice, onClose, onPrint }) => {
                   <td className="py-3 text-sm">
                     <div>
                       <p className="font-medium">{item.name}</p>
-                      {item.size && (
-                        <p className="text-xs text-gray-500">
-                          Size: {item.size}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        {item.color && (
+                          <span className="text-xs text-gray-500 capitalize">
+                            Màu: {item.color}
+                          </span>
+                        )}
+                        {item.size && (
+                          <span className="text-xs text-gray-500">
+                            Size: {item.size}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="py-3 text-sm text-center">{item.quantity}</td>

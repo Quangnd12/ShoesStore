@@ -3,6 +3,8 @@ import { Plus, X } from "lucide-react";
 import SizeGenerator from "./SizeGenerator";
 import GroupedSearchableSelect from "./GroupedSearchableSelect";
 import SearchableSelect from "./SearchableSelect";
+import ColorPicker from "./ColorPicker";
+import ImageUploadWithColorDetection from "./ImageUploadWithColorDetection";
 
 const ProductTabsInvoice = ({ 
   items, 
@@ -190,44 +192,27 @@ const ProductTabsInvoice = ({
                   placeholder="Nhập thương hiệu"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Màu sắc
-                </label>
-                <input
-                  type="text"
-                  value={currentItem.color || ""}
-                  onChange={(e) =>
-                    handleItemChange(tabIndex, itemIndex, "color", e.target.value)
-                  }
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-                  placeholder="Nhập màu sắc"
+              <div className="col-span-2">
+                <ImageUploadWithColorDetection
+                  imageUrl={currentItem.image_url}
+                  onImageChange={(file, imageSrc) => {
+                    handleImageFileChange(tabIndex, itemIndex, file);
+                  }}
+                  onColorDetected={(colorName, colorHex) => {
+                    handleItemChange(tabIndex, itemIndex, "color", colorName);
+                  }}
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Hình ảnh sản phẩm
+                  Màu sắc
                 </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) =>
-                      handleImageFileChange(tabIndex, itemIndex, e.target.files?.[0] || null)
-                    }
-                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm transition-all"
-                  />
-                  {currentItem.image_url && (
-                    <img
-                      src={currentItem.image_url}
-                      alt="Preview"
-                      className="w-16 h-16 object-cover rounded-lg border-2 border-gray-300 shadow-sm"
-                    />
-                  )}
-                </div>
-                <p className="mt-1.5 text-xs text-gray-500">
-                  Ảnh sẽ được lưu dưới dạng base64 trong hệ thống.
-                </p>
+                <ColorPicker
+                  value={currentItem.color || ""}
+                  onChange={(color) => handleItemChange(tabIndex, itemIndex, "color", color)}
+                  imageUrl={currentItem.image_url}
+                  className="w-full"
+                />
               </div>
             </>
           )}

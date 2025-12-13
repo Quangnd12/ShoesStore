@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { productsAPI, salesInvoicesAPI } from "../services/api";
+import ColorDisplay from "./ColorDisplay";
 
 const ProductDetailModal = ({ product, onClose }) => {
   const [sizes, setSizes] = useState([]);
@@ -112,7 +113,16 @@ const ProductDetailModal = ({ product, onClose }) => {
           </div>
           <div>
             <p className="text-sm text-gray-600">Màu sắc</p>
-            <p className="font-medium">{product.color || "-"}</p>
+            {product.color ? (
+              <ColorDisplay 
+                color={product.color} 
+                size="md" 
+                showLabel={true}
+                style="inline"
+              />
+            ) : (
+              <p className="font-medium text-gray-400">-</p>
+            )}
           </div>
           <div>
             <p className="text-sm text-gray-600">Danh mục</p>

@@ -1,5 +1,6 @@
 import { Plus, Minus, X, Package, Edit2, Check } from "lucide-react";
 import { useState } from "react";
+import ColorDisplay from "./ColorDisplay";
 
 const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
   const [isEditingPrice, setIsEditingPrice] = useState(false);
@@ -57,6 +58,14 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
                 {item.name}
               </h4>
               <div className="flex items-center gap-2 mt-1">
+                {item.color && (
+                  <ColorDisplay 
+                    color={item.color} 
+                    size="xs" 
+                    showLabel={false}
+                    style="circle"
+                  />
+                )}
                 {item.size && (
                   <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
                    Size: {item.size}
