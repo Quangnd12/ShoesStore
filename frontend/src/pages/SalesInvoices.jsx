@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Eye, Edit, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Eye, Edit, X, ChevronDown, ChevronUp, FileSpreadsheet, Download } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   salesInvoicesAPI,
   productsAPI,
@@ -12,6 +13,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import SearchableSelect from "../components/SearchableSelect";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SkeletonLoader from "../components/SkeletonLoader";
+import ExportExcelModal from "../components/ExportExcelModal";
 
 const SalesInvoices = () => {
   const { showToast } = useToast();
@@ -24,6 +26,7 @@ const SalesInvoices = () => {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] =
     useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
   
   // Multi-tab structure
   const [tabs, setTabs] = useState([
@@ -167,6 +170,181 @@ const SalesInvoices = () => {
       setShowDetailModal(true);
     } catch (error) {
       alert("Không thể tải chi tiết hóa đơn");
+    }
+  };
+
+  const handleExportExcel = async (options) => {
+    try {
+      showToast("Đang xuất file Excel...", "info");
+      
+      // Tạo params cho API dựa trên options
+      let apiParams = { limit: 10000 };
+      
+      // Xử lý date range
+      if (options.dateRange !== "all") {
+        if (options.dateFrom) apiParams.dateFrom = options.dateFrom;
+        if (options.dateTo) apiParams.dateTo = options.dateTo;
+      }
+      
+      // Lấy tất cả hóa đơn theo filter
+      const response = await salesInvoicesAPI.getAll(apiParams);
+      const allInvoices = response.data?.invoices || response.data || [];
+      
+      if (allInvoices.length === 0) {
+        showToast("Không có dữ liệu để xuất", "warning");
+        return;
+      }
+
+      // Lấy chi tiết từng hóa đơn
+      const detailedInvoices = [];
+      for (const invoice of allInvoices) {
+        try {
+          const detailResponse = await salesInvoicesAPI.getById(invoice.id);
+          const invoiceDetail = detailResponse.data;
+          
+          if (options.format === "summary") {
+            // Format tổng hợp - mỗi dòng là một hóa đơn
+            const summaryRow = {
+              "STT": detailedInvoices.length + 1,
+              "Số hóa đơn": invoiceDetail.invoice_number,
+              "Ngày bán": new Date(invoiceDetail.invoice_date).toLocaleDateString("vi-VN"),
+            };
+
+            if (options.includeCustomerInfo) {
+              summaryRow["Khách hàng"] = invoiceDetail.customer_name || "";
+              summaryRow["Số điện thoại"] = invoiceDetail.customer_phone || "";
+              summaryRow["Email"] = invoiceDetail.customer_email || "";
+            }
+
+            summaryRow["Số sản phẩm"] = invoiceDetail.items?.length || 0;
+            summaryRow["Tổng số lượng"] = invoiceDetail.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+            if (options.includePaymentInfo) {
+              summaryRow["Tổng tiền"] = invoiceDetail.final_amount;
+              summaryRow["Giảm giá"] = invoiceDetail.discount_amount || 0;
+              summaryRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" : 
+                                          invoiceDetail.payment_method === "card" ? "Thẻ" : 
+                                          invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
+            }
+
+            summaryRow["Ghi chú"] = invoiceDetail.notes || "";
+            summaryRow["Người tạo"] = invoiceDetail.created_by || "";
+            summaryRow["Ngày tạo"] = new Date(invoiceDetail.created_at).toLocaleDateString("vi-VN");
+
+            detailedInvoices.push(summaryRow);
+          } else {
+            // Format chi tiết - mỗi dòng là một sản phẩm
+            if (invoiceDetail.items && invoiceDetail.items.length > 0) {
+              invoiceDetail.items.forEach((item) => {
+                const detailRow = {
+                  "STT": detailedInvoices.length + 1,
+                  "Số hóa đơn": invoiceDetail.invoice_number,
+                  "Ngày bán": new Date(invoiceDetail.invoice_date).toLocaleDateString("vi-VN"),
+                };
+
+                if (options.includeCustomerInfo) {
+                  detailRow["Khách hàng"] = invoiceDetail.customer_name || "";
+                  detailRow["Số điện thoại"] = invoiceDetail.customer_phone || "";
+                  detailRow["Email"] = invoiceDetail.customer_email || "";
+                }
+
+                detailRow["Tên sản phẩm"] = item.product_name || item.name;
+
+                if (options.includeProductDetails) {
+                  detailRow["Màu sắc"] = item.color || "";
+                  detailRow["Kích cỡ"] = item.size_eu || item.size || "";
+                }
+
+                detailRow["Số lượng"] = item.quantity;
+                detailRow["Đơn giá"] = item.unit_price;
+                detailRow["Thành tiền"] = item.quantity * item.unit_price;
+
+                if (options.includePaymentInfo) {
+                  detailRow["Tổng hóa đơn"] = invoiceDetail.final_amount;
+                  detailRow["Giảm giá"] = invoiceDetail.discount_amount || 0;
+                  detailRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" : 
+                                              invoiceDetail.payment_method === "card" ? "Thẻ" : 
+                                              invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
+                }
+
+                detailRow["Ghi chú"] = invoiceDetail.notes || "";
+                detailRow["Người tạo"] = invoiceDetail.created_by || "";
+                detailRow["Ngày tạo"] = new Date(invoiceDetail.created_at).toLocaleDateString("vi-VN");
+
+                detailedInvoices.push(detailRow);
+              });
+            } else {
+              // Hóa đơn không có sản phẩm
+              const emptyRow = {
+                "STT": detailedInvoices.length + 1,
+                "Số hóa đơn": invoiceDetail.invoice_number,
+                "Ngày bán": new Date(invoiceDetail.invoice_date).toLocaleDateString("vi-VN"),
+              };
+
+              if (options.includeCustomerInfo) {
+                emptyRow["Khách hàng"] = invoiceDetail.customer_name || "";
+                emptyRow["Số điện thoại"] = invoiceDetail.customer_phone || "";
+                emptyRow["Email"] = invoiceDetail.customer_email || "";
+              }
+
+              emptyRow["Tên sản phẩm"] = "";
+
+              if (options.includeProductDetails) {
+                emptyRow["Màu sắc"] = "";
+                emptyRow["Kích cỡ"] = "";
+              }
+
+              emptyRow["Số lượng"] = 0;
+              emptyRow["Đơn giá"] = 0;
+              emptyRow["Thành tiền"] = 0;
+
+              if (options.includePaymentInfo) {
+                emptyRow["Tổng hóa đơn"] = invoiceDetail.final_amount;
+                emptyRow["Giảm giá"] = invoiceDetail.discount_amount || 0;
+                emptyRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" : 
+                                            invoiceDetail.payment_method === "card" ? "Thẻ" : 
+                                            invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
+              }
+
+              emptyRow["Ghi chú"] = invoiceDetail.notes || "";
+              emptyRow["Người tạo"] = invoiceDetail.created_by || "";
+              emptyRow["Ngày tạo"] = new Date(invoiceDetail.created_at).toLocaleDateString("vi-VN");
+
+              detailedInvoices.push(emptyRow);
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching invoice ${invoice.id}:`, error);
+        }
+      }
+
+      // Tạo workbook và worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(detailedInvoices);
+
+      // Thiết lập độ rộng cột tự động
+      const colWidths = Object.keys(detailedInvoices[0] || {}).map(key => ({
+        wch: Math.max(key.length, 15)
+      }));
+      ws['!cols'] = colWidths;
+
+      // Thêm worksheet vào workbook
+      const sheetName = options.format === "summary" ? "Tổng hợp hóa đơn" : "Chi tiết hóa đơn";
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      // Tạo tên file với timestamp và filter info
+      const now = new Date();
+      const timestamp = now.toISOString().slice(0, 10).replace(/-/g, '');
+      const formatSuffix = options.format === "summary" ? "tonghop" : "chitiet";
+      const fileName = `hoa_don_ban_hang_${formatSuffix}_${timestamp}.xlsx`;
+
+      // Xuất file
+      XLSX.writeFile(wb, fileName);
+      
+      showToast(`Xuất thành công ${detailedInvoices.length} dòng dữ liệu!`, "success");
+    } catch (error) {
+      console.error("Export error:", error);
+      showToast("Có lỗi xảy ra khi xuất file Excel", "error");
     }
   };
 
@@ -644,16 +822,25 @@ const SalesInvoices = () => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Hóa đơn bán hàng</h1>
-        <button
-          onClick={() => {
-            resetAllTabs();
-            setShowModal(true);
-          }}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-        >
-          <Plus size={20} />
-          <span>Thêm hóa đơn bán</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+          >
+            <FileSpreadsheet size={20} />
+            <span>Xuất Excel</span>
+          </button>
+          <button
+            onClick={() => {
+              resetAllTabs();
+              setShowModal(true);
+            }}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+          >
+            <Plus size={20} />
+            <span>Thêm hóa đơn bán</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-4 mb-4">
@@ -1599,6 +1786,14 @@ const SalesInvoices = () => {
           </div>
         </div>
       )}
+
+      {/* Export Excel Modal */}
+      <ExportExcelModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExport={handleExportExcel}
+        totalRecords={invoices.length}
+      />
     </div>
   );
 };
