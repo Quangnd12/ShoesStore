@@ -9,6 +9,7 @@ router.get("/search", productController.searchProducts);
 router.get("/name/:name", productController.getProductsByName);
 router.get("/category/:categoryId", productController.getProductsByCategory);
 router.get("/:id", productController.getProductById);
+router.get("/:id/sizes", productController.getProductSizes); // Lấy sizes của sản phẩm
 
 // Admin routes
 router.post("/", auth, isAdmin, productController.addProduct);

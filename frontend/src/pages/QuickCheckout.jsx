@@ -15,6 +15,7 @@ import { useToast } from "../contexts/ToastContext";
 import LoadingSpinner from "../components/LoadingSpinner";
 import ProductCard from "../components/ProductCard";
 import CartItem from "../components/CartItem";
+import SizeSelectModal from "../components/SizeSelectModal";
 
 const QuickCheckout = () => {
   const { showToast } = useToast();
@@ -27,6 +28,10 @@ const QuickCheckout = () => {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [nextInvoiceNumber, setNextInvoiceNumber] = useState("");
+
+  // Size select modal
+  const [showSizeModal, setShowSizeModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -158,20 +163,47 @@ const QuickCheckout = () => {
   const handleDrop = (e) => {
     e.preventDefault();
     if (draggedProduct) {
-      addToCart(draggedProduct);
+      handleAddToCart(draggedProduct);
       setDraggedProduct(null);
     }
   };
 
+  // Kiểm tra sản phẩm có sizes không
+  const productHasSizes = (product) => {
+    return product.size && product.size.trim() !== '';
+  };
+
+  // Mở modal chọn size hoặc thêm trực tiếp
+  const handleAddToCart = (product) => {
+    if (productHasSizes(product)) {
+      // Sản phẩm có sizes -> mở modal chọn size
+      setSelectedProduct(product);
+      setShowSizeModal(true);
+    } else {
+      // Sản phẩm không có sizes -> thêm trực tiếp
+      addToCart(product, null, 1);
+    }
+  };
+
+  // Xác nhận thêm vào giỏ từ modal
+  const handleConfirmAddToCart = (productWithSize) => {
+    addToCart(productWithSize, productWithSize.selectedSize, productWithSize.quantity);
+  };
+
   // Cart operations
-  const addToCart = (product) => {
-    const existingItem = cart.find((item) => item.id === product.id);
+  const addToCart = (product, selectedSize = null, quantity = 1) => {
+    // Tạo unique key cho sản phẩm (id + size)
+    const cartItemKey = selectedSize ? `${product.id}-${selectedSize}` : `${product.id}`;
+    
+    const existingItem = cart.find((item) => item.cartItemKey === cartItemKey);
+    
     if (existingItem) {
-      if (existingItem.quantity < product.stock_quantity) {
+      const newQuantity = existingItem.quantity + quantity;
+      if (newQuantity <= product.stock_quantity) {
         setCart(
           cart.map((item) =>
-            item.id === product.id
-              ? { ...item, quantity: item.quantity + 1 }
+            item.cartItemKey === cartItemKey
+              ? { ...item, quantity: newQuantity }
               : item
           )
         );
@@ -180,46 +212,63 @@ const QuickCheckout = () => {
         showToast("Không đủ hàng trong kho", "error");
       }
     } else {
-      setCart([
-        ...cart,
-        {
-          ...product,
-          quantity: 1,
-          unit_price: product.price,
-        },
-      ]);
-      showToast("Đã thêm sản phẩm vào giỏ hàng", "success");
+      if (quantity <= product.stock_quantity) {
+        setCart([
+          ...cart,
+          {
+            ...product,
+            cartItemKey,
+            selectedSize,
+            quantity,
+            unit_price: product.price,
+          },
+        ]);
+        showToast("Đã thêm sản phẩm vào giỏ hàng", "success");
+      } else {
+        showToast("Không đủ hàng trong kho", "error");
+      }
     }
   };
 
-  const updateQuantity = (productId, newQuantity) => {
-    const product = products.find((p) => p.id === productId);
-    if (newQuantity > product.stock_quantity) {
-      showToast("Không đủ hàng trong kho", "error");
+  const updateQuantity = (cartItemKey, newQuantity) => {
+    const cartItem = cart.find((item) => item.cartItemKey === cartItemKey);
+    if (!cartItem) return;
+    
+    const product = products.find((p) => p.id === cartItem.id);
+    if (!product) return;
+    
+    // Tính maxQuantity theo size
+    const sizes = product.size ? product.size.split(',').map(s => s.trim()).filter(s => s) : [];
+    const maxQty = sizes.length > 0 
+      ? Math.max(1, Math.floor(product.stock_quantity / sizes.length))
+      : product.stock_quantity;
+    
+    if (newQuantity > maxQty) {
+      showToast(`Số lượng tối đa cho size này là ${maxQty}`, "error");
       return;
     }
     if (newQuantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(cartItemKey);
       return;
     }
     setCart(
       cart.map((item) =>
-        item.id === productId ? { ...item, quantity: newQuantity } : item
+        item.cartItemKey === cartItemKey ? { ...item, quantity: newQuantity } : item
       )
     );
   };
 
-  const updatePrice = (productId, newPrice) => {
+  const updatePrice = (cartItemKey, newPrice) => {
     setCart(
       cart.map((item) =>
-        item.id === productId ? { ...item, unit_price: newPrice } : item
+        item.cartItemKey === cartItemKey ? { ...item, unit_price: newPrice } : item
       )
     );
     showToast("Đã cập nhật giá sản phẩm", "success");
   };
 
-  const removeFromCart = (productId) => {
-    setCart(cart.filter((item) => item.id !== productId));
+  const removeFromCart = (cartItemKey) => {
+    setCart(cart.filter((item) => item.cartItemKey !== cartItemKey));
     showToast("Đã xóa sản phẩm khỏi giỏ hàng", "success");
   };
 
@@ -254,6 +303,7 @@ const QuickCheckout = () => {
         product_id: item.id,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        size: item.selectedSize || null, // Gửi size đã chọn
       }));
 
       const response = await salesInvoicesAPI.create({
@@ -372,15 +422,23 @@ const QuickCheckout = () => {
           {/* Product Grid */}
           <div className="flex-1 overflow-y-auto mb-1 min-h-0">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-              {paginatedProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onDragStart={handleDragStart}
-                  onAddToCart={addToCart}
-                  isInCart={cart.some((item) => item.id === product.id)}
-                />
-              ))}
+              {paginatedProducts.map((product) => {
+                // Lấy danh sách size đã có trong giỏ của sản phẩm này
+                const sizesInCart = cart
+                  .filter(item => item.id === product.id && item.selectedSize)
+                  .map(item => item.selectedSize);
+                
+                return (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onDragStart={handleDragStart}
+                    onAddToCart={handleAddToCart}
+                    isInCart={cart.some((item) => item.id === product.id)}
+                    sizesInCart={sizesInCart}
+                  />
+                );
+              })}
             </div>
 
             {filteredProducts.length === 0 && (
@@ -612,15 +670,25 @@ const QuickCheckout = () => {
                 <p className="text-xs">Chưa có sản phẩm</p>
               </div>
             ) : (
-              cart.map((item) => (
-                <CartItem
-                  key={item.id}
-                  item={item}
-                  onUpdateQuantity={updateQuantity}
-                  onUpdatePrice={updatePrice}
-                  onRemove={removeFromCart}
-                />
-              ))
+              cart.map((item) => {
+                // Tính maxQuantity cho mỗi item dựa trên size
+                const product = products.find(p => p.id === item.id);
+                const sizes = product?.size ? product.size.split(',').map(s => s.trim()).filter(s => s) : [];
+                const maxQty = sizes.length > 0 
+                  ? Math.max(1, Math.floor((product?.stock_quantity || 99) / sizes.length))
+                  : (product?.stock_quantity || 99);
+                
+                return (
+                  <CartItem
+                    key={item.cartItemKey}
+                    item={item}
+                    onUpdateQuantity={(qty) => updateQuantity(item.cartItemKey, qty)}
+                    onUpdatePrice={(price) => updatePrice(item.cartItemKey, price)}
+                    onRemove={() => removeFromCart(item.cartItemKey)}
+                    maxQuantity={maxQty}
+                  />
+                );
+              })
             )}
           </div>
 
@@ -676,6 +744,18 @@ const QuickCheckout = () => {
           onPrint={handlePrint}
         />
       )}
+
+      {/* Size Select Modal */}
+      <SizeSelectModal
+        product={selectedProduct}
+        isOpen={showSizeModal}
+        onClose={() => {
+          setShowSizeModal(false);
+          setSelectedProduct(null);
+        }}
+        onConfirm={handleConfirmAddToCart}
+        cartItems={cart}
+      />
     </div>
   );
 };
@@ -785,9 +865,9 @@ const PrintInvoiceModal = ({ invoice, onClose, onPrint }) => {
                             Màu: {item.color}
                           </span>
                         )}
-                        {item.size && (
+                        {item.selectedSize && (
                           <span className="text-xs text-gray-500">
-                            Size: {item.size}
+                            Size: {item.selectedSize}
                           </span>
                         )}
                       </div>

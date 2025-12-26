@@ -42,8 +42,11 @@ const ExportExcelModal = ({
         options.dateTo = today.toISOString().split('T')[0];
         break;
       case "thisWeek":
-        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
-        const endOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + 6));
+        const currentDay = today.getDay();
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - currentDay);
+        const endOfWeek = new Date(today);
+        endOfWeek.setDate(today.getDate() - currentDay + 6);
         options.dateFrom = startOfWeek.toISOString().split('T')[0];
         options.dateTo = endOfWeek.toISOString().split('T')[0];
         break;
@@ -54,8 +57,11 @@ const ExportExcelModal = ({
         options.dateTo = endOfMonth.toISOString().split('T')[0];
         break;
       case "all":
+        options.dateFrom = "";
+        options.dateTo = "";
+        break;
       case "custom":
-        // Keep existing dates or clear them
+        // Keep existing dates
         break;
     }
 

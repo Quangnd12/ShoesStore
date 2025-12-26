@@ -92,9 +92,36 @@ const SalesInvoice = {
         throw new Error(`Không tìm thấy sản phẩm ID ${item.product_id}`);
       }
       const product = productRows[0];
-      if (product.stock_quantity < item.quantity) {
+      
+      // Lấy size từ item (nếu có) hoặc từ product
+      const size_eu = item.size ? String(item.size) : (product.size ? String(product.size) : null);
+      
+      // Kiểm tra tồn kho theo size nếu có bảng product_sizes
+      let availableQty = product.stock_quantity;
+      if (size_eu) {
+        try {
+          const [tableCheck] = await connection.execute(
+            `SELECT 1 FROM information_schema.tables 
+             WHERE table_schema = DATABASE() AND table_name = 'product_sizes' LIMIT 1`
+          );
+          
+          if (tableCheck.length > 0) {
+            const [sizeRows] = await connection.execute(
+              `SELECT quantity FROM product_sizes WHERE product_id = ? AND size_value = ?`,
+              [item.product_id, size_eu]
+            );
+            if (sizeRows.length > 0) {
+              availableQty = sizeRows[0].quantity;
+            }
+          }
+        } catch (sizeError) {
+          console.log('product_sizes table not available, using stock_quantity');
+        }
+      }
+      
+      if (availableQty < item.quantity) {
         throw new Error(
-          `Không đủ tồn kho cho sản phẩm ${product.name} (ID ${product.id})`
+          `Không đủ tồn kho cho sản phẩm ${product.name}${size_eu ? ` (Size ${size_eu})` : ''} - Còn ${availableQty}`
         );
       }
 
@@ -102,7 +129,6 @@ const SalesInvoice = {
         item.unit_price !== undefined && item.unit_price !== null
           ? item.unit_price
           : product.price;
-      const size_eu = product.size ? String(product.size) : null;
 
       enrichedItems.push({
         product_id: product.id,
@@ -163,6 +189,27 @@ const SalesInvoice = {
         "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND stock_quantity >= ?",
         [item.quantity, item.product_id, item.quantity]
       );
+
+      // Trừ tồn kho theo size nếu có
+      if (size_eu) {
+        try {
+          const [tableCheck] = await connection.execute(
+            `SELECT 1 FROM information_schema.tables 
+             WHERE table_schema = DATABASE() AND table_name = 'product_sizes' LIMIT 1`
+          );
+          
+          if (tableCheck.length > 0) {
+            await connection.execute(
+              `UPDATE product_sizes 
+               SET quantity = GREATEST(0, quantity - ?), updated_at = CURRENT_TIMESTAMP
+               WHERE product_id = ? AND size_value = ?`,
+              [item.quantity, item.product_id, size_eu]
+            );
+          }
+        } catch (sizeError) {
+          console.log('product_sizes table not available, skipping size tracking');
+        }
+      }
     }
   },
 
