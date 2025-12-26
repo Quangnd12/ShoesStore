@@ -2,7 +2,16 @@ const db = require("../config/db");
 
 const Category = {
   getAll: async () => {
-    const [rows] = await db.execute("SELECT * FROM categories");
+    const [rows] = await db.execute(`
+      SELECT 
+        c.id,
+        c.name,
+        COUNT(DISTINCT p.id) as product_count
+      FROM categories c
+      LEFT JOIN products p ON c.id = p.category_id AND p.stock_quantity > 0
+      GROUP BY c.id, c.name
+      ORDER BY c.name
+    `);
     return rows;
   },
   getById: async (id) => {

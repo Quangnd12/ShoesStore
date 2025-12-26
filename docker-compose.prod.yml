@@ -1,0 +1,63 @@
+# Docker Compose for PRODUCTION environment
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: shoe_store_mysql_prod
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-mysql_prod_password_change_me}
+      MYSQL_DATABASE: ${DB_NAME:-shoe_store}
+    volumes:
+      - mysql_prod_data:/var/lib/mysql
+    networks:
+      - shoe_store_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      target: production
+    container_name: shoe_store_backend_prod
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DB_HOST=mysql
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-mysql_prod_password_change_me}
+      - DB_NAME=${DB_NAME:-shoe_store}
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "5000:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - shoe_store_network
+
+  # Frontend with Nginx
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    container_name: shoe_store_frontend_prod
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - shoe_store_network
+
+volumes:
+  mysql_prod_data:
+    driver: local
+
+networks:
+  shoe_store_network:
+    driver: bridge

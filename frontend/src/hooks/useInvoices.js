@@ -1,0 +1,207 @@
+import { useState, useEffect, useMemo } from "react";
+import { useToast } from "../contexts/ToastContext";
+
+export const useInvoices = (api, type = "purchase") => {
+  const { showToast } = useToast();
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageCache, setPageCache] = useState({});
+  const [filters, setFilters] = useState({
+    invoiceNumber: "",
+    supplier: "",
+    customer: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+
+  const fetchInvoices = async (forceRefresh = false) => {
+    try {
+      const cacheKey = JSON.stringify({
+        page: currentPage,
+        limit: itemsPerPage,
+        filters: filters,
+      });
+
+      if (!forceRefresh && pageCache[cacheKey]) {
+        const cached = pageCache[cacheKey];
+        setInvoices(cached.invoices);
+        setTotalPages(cached.totalPages);
+        setLoading(false);
+        return;
+      }
+
+      const response = await api.getAll({ 
+        page: currentPage,
+        limit: itemsPerPage 
+      });
+      
+      const invoicesData = response.data?.invoices || [];
+      const total = response.data?.totalItems || invoicesData.length;
+      const pages = response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1;
+      
+      setInvoices(invoicesData);
+      setTotalPages(pages);
+
+      setPageCache((prev) => ({
+        ...prev,
+        [cacheKey]: {
+          invoices: invoicesData,
+          totalPages: pages,
+          timestamp: Date.now(),
+        },
+      }));
+    } catch (error) {
+      console.error("Error fetching invoices:", error);
+      showToast(`Không thể tải danh sách hóa đơn ${type === "purchase" ? "nhập" : "bán"}`, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshInvoices = async () => {
+    setLoading(true);
+    setPageCache({});
+    await fetchInvoices(true);
+    showToast("Đã làm mới danh sách hóa đơn", "success");
+  };
+
+  const deleteInvoice = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa hóa đơn này?")) return;
+    
+    try {
+      await api.delete(id);
+      showToast(`Xóa hóa đơn ${type === "purchase" ? "nhập" : "bán"} thành công!`, "success");
+      
+      setPageCache({});
+      await fetchInvoices(true);
+    } catch (error) {
+      showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
+    }
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      invoiceNumber: "",
+      supplier: "",
+      customer: "",
+      dateFrom: "",
+      dateTo: "",
+    });
+  };
+
+  // Filter invoices
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((invoice) => {
+      const matchesInvoiceNumber = filters.invoiceNumber
+        ? invoice.invoice_number
+            ?.toLowerCase()
+            .includes(filters.invoiceNumber.toLowerCase())
+        : true;
+
+      const supplierName = invoice.supplier_name || "";
+      const customerName = invoice.customer_name || invoice.account_username || "";
+      const matchesSupplier = filters.supplier
+        ? supplierName.toLowerCase().includes(filters.supplier.toLowerCase())
+        : true;
+      const matchesCustomer = filters.customer
+        ? customerName.toLowerCase().includes(filters.customer.toLowerCase())
+        : true;
+
+      const invoiceDate = invoice.invoice_date
+        ? new Date(invoice.invoice_date)
+        : null;
+
+      const matchesDateFrom = filters.dateFrom
+        ? invoiceDate && invoiceDate >= new Date(filters.dateFrom + "T00:00:00")
+        : true;
+
+      const matchesDateTo = filters.dateTo
+        ? invoiceDate && invoiceDate <= new Date(filters.dateTo + "T23:59:59")
+        : true;
+
+      return (
+        matchesInvoiceNumber &&
+        (type === "purchase" ? matchesSupplier : matchesCustomer) &&
+        matchesDateFrom &&
+        matchesDateTo
+      );
+    });
+  }, [invoices, filters, type]);
+
+  // Group invoices by date
+  const groupedInvoices = useMemo(() => {
+    const groups = {};
+    
+    filteredInvoices.forEach((invoice) => {
+      const dateKey = new Date(invoice.invoice_date).toLocaleDateString("vi-VN");
+      
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          date: dateKey,
+          invoices: [],
+          totalCost: 0,
+          totalRevenue: 0,
+          totalProducts: 0,
+        };
+      }
+      
+      groups[dateKey].invoices.push(invoice);
+      
+      if (type === "purchase") {
+        groups[dateKey].totalCost += parseFloat(invoice.total_cost) || 0;
+        if (invoice.items && Array.isArray(invoice.items)) {
+          groups[dateKey].totalProducts += invoice.items.reduce((sum, item) => {
+            return sum + (parseInt(item.quantity) || 0);
+          }, 0);
+        }
+      } else {
+        groups[dateKey].totalRevenue += parseFloat(invoice.total_revenue) || 0;
+        groups[dateKey].totalProducts += parseInt(invoice.total_quantity) || 0;
+      }
+    });
+    
+    // Sort invoices within each group
+    Object.values(groups).forEach(group => {
+      group.invoices.sort((a, b) => {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        return timeB - timeA;
+      });
+    });
+
+    // Convert to array and sort by date descending
+    return Object.values(groups).sort((a, b) => {
+      const [dayA, monthA, yearA] = a.date.split("/");
+      const [dayB, monthB, yearB] = b.date.split("/");
+      const dateA = new Date(yearA, monthA - 1, dayA);
+      const dateB = new Date(yearB, monthB - 1, dayB);
+      
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [filteredInvoices, type]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [currentPage, itemsPerPage]);
+
+  return {
+    invoices,
+    loading,
+    currentPage,
+    setCurrentPage,
+    itemsPerPage,
+    setItemsPerPage,
+    totalPages,
+    filters,
+    setFilters,
+    filteredInvoices,
+    groupedInvoices,
+    fetchInvoices,
+    refreshInvoices,
+    deleteInvoice,
+    clearFilters,
+  };
+};

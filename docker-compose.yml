@@ -1,0 +1,91 @@
+# Docker Compose for DEVELOPMENT environment
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: shoe_store_mysql_dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+      MYSQL_DATABASE: shoe_store
+    ports:
+      - "3307:3306"  # Port 3307 để không conflict với AMPPS
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database:/docker-entrypoint-initdb.d  # Auto import SQL files
+    networks:
+      - shoe_store_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      target: development
+    container_name: shoe_store_backend_dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=mysql
+      - DB_NAME=shoe_store
+      - JWT_SECRET=b66aa6f6287c5d74e8297836375bff1ff5290f26e594535ddbadccff93f266dd574ccd2c4d3a7f1bdd81afc8a7498b22046565d96dcfc72ba0bb4d35c484a59d
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - shoe_store_network
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    container_name: shoe_store_frontend_dev
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+    depends_on:
+      - backend
+    networks:
+      - shoe_store_network
+
+  # phpMyAdmin (thay thế cho AMPPS phpMyAdmin)
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: shoe_store_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: mysql
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - shoe_store_network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  shoe_store_network:
+    driver: bridge

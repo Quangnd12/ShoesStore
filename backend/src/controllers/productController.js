@@ -13,8 +13,19 @@ exports.getAllProducts = async (req, res) => {
         .json({ message: "Invalid page or limit parameters" });
     }
 
-    const products = await Product.getAll(limit, offset);
-    const total = await Product.getTotal();
+    // Lấy filters từ query params
+    const filters = {
+      name: req.query.name || null,
+      category_id: req.query.category_id || null,
+      brand: req.query.brand || null,
+      minPrice: req.query.minPrice || null,
+      maxPrice: req.query.maxPrice || null,
+      minStock: req.query.minStock || null,
+      maxStock: req.query.maxStock || null,
+    };
+
+    const products = await Product.getAll(limit, offset, filters);
+    const total = await Product.getTotal(filters);
 
     // Format lại dữ liệu sản phẩm
     const formattedProducts = products.map((product) => ({
@@ -166,6 +177,103 @@ exports.getProductsByCategory = async (req, res) => {
       totalPages: Math.ceil(total / limit),
       totalItems: total,
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Nhập hàng theo túi: tạo nhiều products cùng tên nhưng khác size
+exports.createProductBatch = async (req, res) => {
+  try {
+    // Kiểm tra req.body
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        message:
+          "Request body không được để trống. Vui lòng gửi dữ liệu với Content-Type: application/json",
+      });
+    }
+
+    const {
+      name,
+      description,
+      price,
+      category_id,
+      image_url,
+      discount_price,
+      brand,
+      color,
+      sizes, // [{size_eu, stock_quantity}]
+    } = req.body;
+
+    if (
+      !name ||
+      !price ||
+      !category_id ||
+      !sizes ||
+      !Array.isArray(sizes) ||
+      sizes.length === 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Vui lòng cung cấp đầy đủ: name, price, category_id, và danh sách sizes (size_eu, stock_quantity)",
+        received: {
+          hasName: !!name,
+          hasPrice: !!price,
+          hasCategoryId: !!category_id,
+          hasSizes: !!sizes,
+          sizesIsArray: Array.isArray(sizes),
+          sizesLength: sizes?.length || 0,
+        },
+      });
+    }
+
+    // Validate sizes
+    for (const size of sizes) {
+      if (
+        !size.size_eu ||
+        size.stock_quantity === undefined ||
+        size.stock_quantity < 0
+      ) {
+        return res.status(400).json({
+          message: "Mỗi size cần có size_eu và stock_quantity >= 0",
+        });
+      }
+      if (size.size_eu < 30 || size.size_eu > 50) {
+        return res.status(400).json({
+          message: "Size EU phải trong khoảng 30-50",
+        });
+      }
+    }
+
+    const baseProduct = {
+      name,
+      description,
+      price,
+      category_id,
+      image_url,
+      discount_price,
+      brand,
+      color,
+    };
+
+    const results = await Product.createBatch(baseProduct, sizes);
+    res.json({
+      message: "Nhập hàng thành công!",
+      products_created: results.length,
+      sizes: sizes.map((s) => s.size_eu),
+    });
+  } catch (err) {
+    console.error("Error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Lấy tất cả size của một sản phẩm (theo tên)
+exports.getProductsByName = async (req, res) => {
+  try {
+    const { name } = req.params;
+    const products = await Product.getByProductName(name);
+    res.json({ name, products });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
