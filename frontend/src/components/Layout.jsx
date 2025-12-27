@@ -11,6 +11,7 @@ import {
   X
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import SmartColorPickerWidget from './SmartColorPickerWidget'
 
 const Layout = () => {
   const navigate = useNavigate()
@@ -149,6 +150,9 @@ const Layout = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Smart Color Picker Widget */}
+      <SmartColorPickerWidget />
     </div>
   )
 }
