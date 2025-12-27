@@ -197,7 +197,7 @@ const SmartColorPickerWidget = () => {
     
     // Check color name database
     if (COLOR_DATABASE[trimmed]) {
-      return  [trimmed];
+      return COLOR_DATABASE[trimmed];
     }
     
     // Check hex format
@@ -241,6 +241,7 @@ const SmartColorPickerWidget = () => {
 
   // Convert Hex to RGB
   const hexToRgb = (hex) => {
+    if (!hex || typeof hex !== 'string') return null;
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
       r: parseInt(result[1], 16),
@@ -251,7 +252,8 @@ const SmartColorPickerWidget = () => {
 
   // Get color name from hex
   const getColorName = (hex) => {
-    return HEX_TO_NAME[hex?.toUpperCase()] || null;
+    if (!hex || typeof hex !== 'string') return null;
+    return HEX_TO_NAME[hex.toUpperCase()] || null;
   };
 
   // Handle input change with live preview

@@ -39,8 +39,10 @@ export const useSalesInvoice = () => {
     item: {
       sales_invoice_item_id: "",
       quantity: "",
+      max_quantity: "",
       new_product_id: "",
       new_unit_price: "",
+      new_size: "",
     },
   });
 
@@ -230,22 +232,22 @@ export const useSalesInvoice = () => {
     try {
       const response = await salesInvoicesAPI.getById(invoiceId);
       setSelectedInvoiceForReturn(response.data);
+      
+      // Find first item with quantity > 0
+      const firstValidItem = response.data.items?.find(item => item.quantity > 0);
+      
       setReturnForm({
         type: "return",
         reason: "",
         notes: "",
         sales_invoice_id: invoiceId,
         item: {
-          sales_invoice_item_id:
-            response.data.items && response.data.items[0]
-              ? response.data.items[0].id
-              : "",
-          quantity:
-            response.data.items && response.data.items[0]
-              ? response.data.items[0].quantity
-              : "",
+          sales_invoice_item_id: firstValidItem ? firstValidItem.id : "",
+          quantity: firstValidItem ? "1" : "",
+          max_quantity: firstValidItem ? firstValidItem.quantity.toString() : "",
           new_product_id: "",
           new_unit_price: "",
+          new_size: "",
         },
       });
       setShowReturnModal(true);
@@ -301,6 +303,10 @@ export const useSalesInvoice = () => {
               returnForm.type === "exchange" && returnForm.item.new_unit_price
                 ? parseFloat(returnForm.item.new_unit_price)
                 : undefined,
+            new_size:
+              returnForm.type === "exchange" && returnForm.item.new_size
+                ? returnForm.item.new_size
+                : undefined,
           },
         ],
       };
@@ -309,6 +315,9 @@ export const useSalesInvoice = () => {
       showToast("Tạo yêu cầu hoàn trả/đổi hàng thành công!", "success");
       setShowReturnModal(false);
       setSelectedInvoiceForReturn(null);
+      
+      // Trigger refresh of invoice list and products
+      window.dispatchEvent(new Event("invoices-updated"));
       await fetchProducts();
     } catch (error) {
       showToast(

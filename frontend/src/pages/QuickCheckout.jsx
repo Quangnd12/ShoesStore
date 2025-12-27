@@ -54,6 +54,15 @@ const QuickCheckout = () => {
   useEffect(() => {
     fetchProducts();
     fetchNextInvoiceNumber();
+    
+    // Listen for invoice updates (from return/exchange)
+    const handleInvoicesUpdated = () => {
+      console.log("Invoices updated, refreshing products...");
+      fetchProducts();
+    };
+    
+    window.addEventListener('invoices-updated', handleInvoicesUpdated);
+    return () => window.removeEventListener('invoices-updated', handleInvoicesUpdated);
   }, []);
 
   const fetchProducts = async () => {
