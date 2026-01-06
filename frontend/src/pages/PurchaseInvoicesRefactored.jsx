@@ -239,6 +239,19 @@ const PurchaseInvoices = () => {
         onClose={() => setShowDetailModal(false)}
         invoice={selectedInvoice}
         type="purchase"
+        onInvoiceUpdated={async () => {
+          clearCache();
+          await fetchInvoices(true);
+          // Refresh selected invoice data
+          if (selectedInvoice?.id) {
+            try {
+              const response = await purchaseInvoicesAPI.getById(selectedInvoice.id);
+              setShowDetailModal(false);
+            } catch (error) {
+              console.error('Error refreshing invoice:', error);
+            }
+          }
+        }}
       />
 
       {/* Confirm Dialog */}

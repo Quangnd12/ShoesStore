@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { AlertTriangle, Package } from "lucide-react";
+import { AlertTriangle, Package, RefreshCw, ShoppingCart, Eye } from "lucide-react";
 import { dashboardAPI } from "../../services/api";
 
 const LowStockAlert = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hoveredId, setHoveredId] = useState(null);
 
   useEffect(() => {
     fetchLowStock();
@@ -22,153 +23,206 @@ const LowStockAlert = () => {
     }
   };
 
-  // Parse sizes and their quantities from product
-  const parseSizes = (product) => {
-    // If availableSizes exists, use it
-    if (product.availableSizes && product.availableSizes.length > 0) {
-      return product.availableSizes;
-    }
-    
-    // Parse from size string
-    if (product.size) {
-      const sizes = product.size.split(',').map(s => s.trim()).filter(Boolean);
-      const qtyPerSize = Math.floor((product.stock_quantity || 0) / sizes.length) || 0;
-      return sizes.map(s => ({ size: s, quantity: qtyPerSize }));
-    }
-    
-    return [];
-  };
-
-  // Get tag color based on quantity
-  const getSizeTagStyle = (quantity) => {
-    if (quantity === 0) return "bg-red-100 text-red-700 border-red-200";
-    if (quantity <= 2) return "bg-yellow-100 text-yellow-700 border-yellow-200";
-    return "bg-green-100 text-green-700 border-green-200";
-  };
-
-  const getStockBadge = (quantity) => {
-    if (quantity === 0) return { text: "Hết hàng", style: "bg-red-500 text-white" };
-    if (quantity <= 3) return { text: `Còn ${quantity}`, style: "bg-orange-500 text-white" };
-    return { text: `Còn ${quantity}`, style: "bg-yellow-500 text-white" };
+  // Get stock level info
+  const getStockLevel = (quantity) => {
+    if (quantity === 0) return { 
+      label: "Hết hàng", 
+      color: "bg-red-500", 
+      bgColor: "bg-red-50",
+      textColor: "text-red-700",
+      percentage: 0 
+    };
+    if (quantity <= 3) return { 
+      label: "Sắp hết", 
+      color: "bg-orange-500", 
+      bgColor: "bg-orange-50",
+      textColor: "text-orange-700",
+      percentage: (quantity / 10) * 100 
+    };
+    if (quantity <= 5) return { 
+      label: "Thấp", 
+      color: "bg-yellow-500", 
+      bgColor: "bg-yellow-50",
+      textColor: "text-yellow-700",
+      percentage: (quantity / 10) * 100 
+    };
+    return { 
+      label: "Cần nhập", 
+      color: "bg-blue-500", 
+      bgColor: "bg-blue-50",
+      textColor: "text-blue-700",
+      percentage: (quantity / 10) * 100 
+    };
   };
 
   return (
-    <div className="bg-white rounded-lg shadow border border-gray-200">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="font-semibold flex items-center text-gray-800">
-          <AlertTriangle className="mr-2 text-red-500" size={18} />
-          Cảnh báo tồn kho
-        </h3>
-        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-          {products.length} sản phẩm
-        </span>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-red-50 rounded-lg relative">
+            <AlertTriangle size={18} className="text-red-500" />
+            {products.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                {products.length}
+              </span>
+            )}
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">Cảnh báo tồn kho</h3>
+            <p className="text-xs text-gray-400">{products.length} sản phẩm cần chú ý</p>
+          </div>
+        </div>
+        <button 
+          onClick={fetchLowStock}
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          title="Làm mới"
+        >
+          <RefreshCw size={16} className={`text-gray-400 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
+      {/* Content */}
       {loading ? (
-        <div className="p-8 text-center text-gray-500">Đang tải...</div>
+        <div className="p-5 space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 animate-pulse">
+              <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+              <div className="flex-1">
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-2 bg-gray-100 rounded w-full"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : products.length === 0 ? (
-        <div className="p-8 text-center text-green-600">
-          <Package size={32} className="mx-auto mb-2 text-green-400" />
-          ✓ Tất cả sản phẩm đều đủ hàng
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Package size={32} className="text-green-500" />
+          </div>
+          <p className="text-green-600 font-medium">Tất cả sản phẩm đều đủ hàng!</p>
+          <p className="text-sm text-gray-400 mt-1">Không có sản phẩm nào cần nhập thêm</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600 text-xs uppercase">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">Sản phẩm</th>
-                <th className="px-3 py-2 text-left font-medium">Size</th>
-                <th className="px-3 py-2 text-right font-medium">Tồn kho</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {products.map((product) => {
-                const sizes = parseSizes(product);
-                const badge = getStockBadge(product.stock_quantity);
-                
-                return (
-                  <tr key={product.id} className="hover:bg-gray-50">
-                    {/* Product info with thumbnail */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                          {product.image_url ? (
-                            <img 
-                              src={product.image_url} 
-                              alt="" 
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package size={16} className="text-gray-300" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-900 truncate max-w-[150px]" title={product.name}>
-                            {product.name}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {product.category_name || "Chưa phân loại"}
-                          </p>
-                        </div>
+        <div className="divide-y divide-gray-50">
+          {products.map((product, index) => {
+            const stockLevel = getStockLevel(product.stock_quantity);
+            const isHovered = hoveredId === product.id;
+            
+            return (
+              <div 
+                key={product.id}
+                className="px-5 py-3 hover:bg-gray-50 transition-all cursor-pointer group"
+                onMouseEnter={() => setHoveredId(product.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                style={{ 
+                  animationDelay: `${index * 50}ms`,
+                  animation: 'fadeIn 0.3s ease-out forwards'
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  {/* Product Image */}
+                  <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 group-hover:ring-2 ring-blue-200 transition-all">
+                    {product.image_url ? (
+                      <img 
+                        src={product.image_url} 
+                        alt="" 
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package size={20} className="text-gray-300" />
                       </div>
-                    </td>
-                    
-                    {/* Size tags */}
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1 max-w-[180px]">
-                        {sizes.length > 0 ? (
-                          sizes.slice(0, 6).map((sizeInfo, idx) => (
-                            <span
-                              key={idx}
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${getSizeTagStyle(sizeInfo.quantity)}`}
-                              title={`Size ${sizeInfo.size}: ${sizeInfo.quantity} sản phẩm`}
-                            >
-                              {sizeInfo.size}
-                              {sizeInfo.quantity <= 2 && (
-                                <span className="ml-0.5 text-[10px]">({sizeInfo.quantity})</span>
-                              )}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
-                        {sizes.length > 6 && (
-                          <span className="text-xs text-gray-400">+{sizes.length - 6}</span>
-                        )}
-                      </div>
-                    </td>
-                    
-                    {/* Stock badge */}
-                    <td className="px-3 py-2 text-right">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-bold ${badge.style}`}>
-                        {badge.text}
+                    )}
+                    {/* Stock badge overlay */}
+                    <div className={`absolute bottom-0 left-0 right-0 text-center text-[10px] font-bold py-0.5 ${stockLevel.color} text-white`}>
+                      {product.stock_quantity}
+                    </div>
+                  </div>
+
+                  {/* Product Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="font-medium text-gray-800 text-sm truncate pr-2" title={product.name}>
+                        {product.name}
+                      </p>
+                      <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${stockLevel.bgColor} ${stockLevel.textColor}`}>
+                        {stockLevel.label}
                       </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div className="relative">
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${stockLevel.color} rounded-full transition-all duration-500`}
+                          style={{ width: `${Math.max(stockLevel.percentage, 5)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className="text-[10px] text-gray-400">
+                          {product.category_name || "Chưa phân loại"}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          {product.stock_quantity}/10 tối thiểu
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className={`flex gap-1 transition-opacity ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+                    <button 
+                      className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                      title="Xem chi tiết"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button 
+                      className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                      title="Nhập hàng"
+                    >
+                      <ShoppingCart size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Legend */}
+      {/* Footer Legend */}
       {products.length > 0 && (
-        <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex items-center justify-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-500"></span> Hết hàng
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-yellow-500"></span> Sắp hết (≤2)
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-500"></span> Còn hàng
-          </span>
+        <div className="px-5 py-3 bg-gray-50 border-t border-gray-100">
+          <div className="flex items-center justify-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+              <span className="text-gray-500">Hết hàng (0)</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+              <span className="text-gray-500">Sắp hết (1-3)</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+              <span className="text-gray-500">Thấp (4-5)</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+              <span className="text-gray-500">Cần nhập (6-9)</span>
+            </span>
+          </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateX(-10px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 };

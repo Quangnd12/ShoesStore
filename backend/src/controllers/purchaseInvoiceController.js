@@ -101,6 +101,63 @@ exports.getPurchaseInvoiceById = async (req, res) => {
   }
 };
 
+// Cập nhật hóa đơn nhập hàng
+exports.updatePurchaseInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { supplier_id, invoice_date, items, notes } = req.body;
+
+    // Kiểm tra hóa đơn tồn tại
+    const invoice = await PurchaseInvoice.getById(id);
+    if (!invoice) {
+      return res.status(404).json({ message: "Không tìm thấy hóa đơn nhập" });
+    }
+
+    // Validate dữ liệu
+    if (!supplier_id || !invoice_date || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ 
+        message: "Vui lòng cung cấp đầy đủ: supplier_id, invoice_date, items" 
+      });
+    }
+
+    // Validate items
+    for (const item of items) {
+      if (!item.product_id) {
+        return res.status(400).json({ 
+          message: "Khi cập nhật hóa đơn, mỗi item phải có product_id" 
+        });
+      }
+      if (!item.quantity || !item.unit_cost) {
+        return res.status(400).json({ 
+          message: "Mỗi item cần có: product_id, quantity, unit_cost" 
+        });
+      }
+      if (item.quantity <= 0 || item.unit_cost <= 0) {
+        return res.status(400).json({ 
+          message: "quantity và unit_cost phải lớn hơn 0" 
+        });
+      }
+    }
+
+    const result = await PurchaseInvoice.update(id, {
+      supplier_id,
+      invoice_date,
+      items,
+      notes,
+    });
+
+    res.json({ 
+      message: "Cập nhật hóa đơn nhập thành công!", 
+      invoice_id: result.id,
+      total_cost: result.total_cost,
+      items_count: result.items_count
+    });
+  } catch (err) {
+    console.error("Error:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // Xóa hóa đơn nhập
 exports.deletePurchaseInvoice = async (req, res) => {
   try {

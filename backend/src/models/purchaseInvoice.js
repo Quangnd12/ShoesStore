@@ -293,6 +293,144 @@ const PurchaseInvoice = {
     }
   },
 
+  // Cập nhật hóa đơn nhập hàng
+  update: async (id, data) => {
+    const {
+      supplier_id,
+      invoice_date,
+      items,
+      notes,
+    } = data;
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Lấy chi tiết hóa đơn cũ để hoàn trả tồn kho
+      const oldItems = await PurchaseInvoice.getItems(id, connection);
+
+      // Hoàn trả tồn kho từ hóa đơn cũ
+      for (const item of oldItems) {
+        await connection.execute(
+          "UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE id = ?",
+          [item.quantity, item.product_id]
+        );
+
+        // Hoàn trả product_sizes nếu có size
+        if (item.size_eu) {
+          try {
+            const [tableCheck] = await connection.execute(
+              `SELECT 1 FROM information_schema.tables 
+               WHERE table_schema = DATABASE() AND table_name = 'product_sizes' LIMIT 1`
+            );
+            
+            if (tableCheck.length > 0) {
+              await connection.execute(
+                `UPDATE product_sizes 
+                 SET quantity = GREATEST(0, quantity - ?), updated_at = CURRENT_TIMESTAMP
+                 WHERE product_id = ? AND size_value = ?`,
+                [item.quantity, item.product_id, item.size_eu]
+              );
+            }
+          } catch (sizeError) {
+            console.log('product_sizes table not available, skipping size tracking');
+          }
+        }
+      }
+
+      // Xóa chi tiết hóa đơn cũ
+      await connection.execute(
+        "DELETE FROM purchase_invoice_items WHERE purchase_invoice_id = ?",
+        [id]
+      );
+
+      // Tính toán và thêm chi tiết hóa đơn mới
+      let total_cost = 0;
+      const processedItems = [];
+
+      for (const item of items) {
+        // Chỉ hỗ trợ sản phẩm đã tồn tại khi cập nhật
+        if (!item.product_id) {
+          throw new Error("Khi cập nhật hóa đơn, chỉ hỗ trợ sản phẩm đã tồn tại");
+        }
+
+        const [productRows] = await connection.execute(
+          "SELECT id, name, size FROM products WHERE id = ?",
+          [item.product_id]
+        );
+        if (!productRows.length) {
+          throw new Error(`Không tìm thấy sản phẩm với ID: ${item.product_id}`);
+        }
+
+        const product = productRows[0];
+        const size_eu = item.size_eu || item.size ? String(item.size_eu || item.size) : (product.size ? String(product.size) : null);
+
+        processedItems.push({
+          product_id: item.product_id,
+          size_eu,
+          quantity: item.quantity,
+          unit_cost: item.unit_cost,
+          total_cost: item.quantity * item.unit_cost,
+        });
+
+        total_cost += item.quantity * item.unit_cost;
+      }
+
+      // Cập nhật thông tin hóa đơn
+      await connection.execute(
+        `UPDATE purchase_invoices 
+         SET supplier_id = ?, invoice_date = ?, total_cost = ?, notes = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [supplier_id, invoice_date, total_cost, notes || null, id]
+      );
+
+      // Thêm chi tiết hóa đơn mới và cập nhật tồn kho
+      for (const item of processedItems) {
+        await connection.execute(
+          `INSERT INTO purchase_invoice_items 
+           (purchase_invoice_id, product_id, size_eu, quantity, unit_cost, total_cost) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [id, item.product_id, item.size_eu, item.quantity, item.unit_cost, item.total_cost]
+        );
+
+        // Cập nhật tồn kho
+        await connection.execute(
+          "UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?",
+          [item.quantity, item.product_id]
+        );
+
+        // Cập nhật product_sizes nếu có size
+        if (item.size_eu) {
+          try {
+            const [tableCheck] = await connection.execute(
+              `SELECT 1 FROM information_schema.tables 
+               WHERE table_schema = DATABASE() AND table_name = 'product_sizes' LIMIT 1`
+            );
+            
+            if (tableCheck.length > 0) {
+              await connection.execute(
+                `INSERT INTO product_sizes (product_id, size_value, quantity)
+                 VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP`,
+                [item.product_id, item.size_eu, item.quantity, item.quantity]
+              );
+            }
+          } catch (sizeError) {
+            console.log('product_sizes table not available, skipping size tracking');
+          }
+        }
+      }
+
+      await connection.commit();
+      return { id, total_cost, items_count: processedItems.length };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
+
   // Lấy số hóa đơn tiếp theo (tự động tăng)
   getNextInvoiceNumber: async () => {
     try {

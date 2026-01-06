@@ -1,29 +1,51 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Edit2 } from 'lucide-react';
 import GroupedProductVariants from '../GroupedProductVariants';
+import PurchaseInvoiceEditModal from './purchase/PurchaseInvoiceEditModal';
 
 const InvoiceDetailModal = ({ 
   isOpen, 
   onClose, 
   invoice, 
-  type = 'purchase' // 'purchase' or 'sales'
+  type = 'purchase', // 'purchase' or 'sales'
+  onInvoiceUpdated
 }) => {
+  const [showEditModal, setShowEditModal] = useState(false);
+
   if (!isOpen || !invoice) return null;
 
+  const handleEditSuccess = () => {
+    setShowEditModal(false);
+    onInvoiceUpdated?.();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold">
-            Chi tiết hóa đơn {type === 'purchase' ? 'nhập' : 'bán'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <X size={24} />
-          </button>
-        </div>
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">
+              Chi tiết hóa đơn {type === 'purchase' ? 'nhập' : 'bán'}
+            </h2>
+            <div className="flex items-center gap-2">
+              {type === 'purchase' && (
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  title="Chỉnh sửa hóa đơn"
+                >
+                  <Edit2 size={18} />
+                  <span>Chỉnh sửa</span>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          </div>
         
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -233,8 +255,19 @@ const InvoiceDetailModal = ({
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+
+      {/* Edit Modal for Purchase Invoice */}
+      {type === 'purchase' && (
+        <PurchaseInvoiceEditModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          invoice={invoice}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+    </>
   );
 };
 

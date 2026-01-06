@@ -9,6 +9,7 @@ router.post("/import", auth, isAdmin, purchaseInvoiceController.importPurchaseIn
 router.get("/", auth, isAdmin, purchaseInvoiceController.getAllPurchaseInvoices);
 router.get("/next-number", auth, isAdmin, purchaseInvoiceController.getNextInvoiceNumber);
 router.get("/:id", auth, purchaseInvoiceController.getPurchaseInvoiceById);
+router.put("/:id", auth, isAdmin, purchaseInvoiceController.updatePurchaseInvoice);
 router.delete("/:id", auth, isAdmin, purchaseInvoiceController.deletePurchaseInvoice);
 
 module.exports = router;
