@@ -62,6 +62,8 @@ export const purchaseInvoicesAPI = {
   import: (invoices) => api.post("/purchase-invoices/import", { invoices }),
   delete: (id) => api.delete(`/purchase-invoices/${id}`),
   getNextInvoiceNumber: () => api.get("/purchase-invoices/next-number"),
+  getHistoryByProductId: (productId) => api.get(`/purchase-invoices/history/product/${productId}`),
+  getHistoryByProductName: (name) => api.get("/purchase-invoices/history/search", { params: { name } }),
 };
 
 // Sales Invoices API

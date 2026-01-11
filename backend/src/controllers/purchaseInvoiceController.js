@@ -183,6 +183,31 @@ exports.getNextInvoiceNumber = async (req, res) => {
   }
 };
 
+// Lấy lịch sử nhập hàng của sản phẩm theo ID
+exports.getPurchaseHistoryByProductId = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const history = await PurchaseInvoice.getByProductId(productId);
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Lấy lịch sử nhập hàng theo tên sản phẩm
+exports.getPurchaseHistoryByProductName = async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) {
+      return res.status(400).json({ message: "Vui lòng cung cấp tên sản phẩm" });
+    }
+    const history = await PurchaseInvoice.getByProductName(name);
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 // Import nhiều hóa đơn nhập hàng từ Excel
 exports.importPurchaseInvoices = async (req, res) => {
   try {

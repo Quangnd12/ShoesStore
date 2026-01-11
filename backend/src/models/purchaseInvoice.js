@@ -239,6 +239,61 @@ const PurchaseInvoice = {
     return rows;
   },
 
+  // Lấy lịch sử nhập hàng của sản phẩm
+  getByProductId: async (productId) => {
+    const [rows] = await db.execute(
+      `SELECT 
+        pi.id as invoice_id,
+        pi.invoice_number,
+        pi.invoice_date,
+        pi.notes as invoice_notes,
+        s.name as supplier_name,
+        s.phone as supplier_phone,
+        pii.quantity,
+        pii.unit_cost,
+        pii.total_cost,
+        pii.size_eu,
+        pii.created_at as item_created_at
+       FROM purchase_invoice_items pii
+       JOIN purchase_invoices pi ON pii.purchase_invoice_id = pi.id
+       LEFT JOIN suppliers s ON pi.supplier_id = s.id
+       WHERE pii.product_id = ?
+       ORDER BY pi.invoice_date DESC, pi.created_at DESC`,
+      [productId]
+    );
+    return rows;
+  },
+
+  // Lấy lịch sử nhập hàng theo tên sản phẩm (cho các biến thể)
+  getByProductName: async (productName) => {
+    const [rows] = await db.execute(
+      `SELECT 
+        pi.id as invoice_id,
+        pi.invoice_number,
+        pi.invoice_date,
+        pi.notes as invoice_notes,
+        s.name as supplier_name,
+        s.phone as supplier_phone,
+        pii.quantity,
+        pii.unit_cost,
+        pii.total_cost,
+        pii.size_eu,
+        pii.created_at as item_created_at,
+        p.id as product_id,
+        p.name as product_name,
+        p.color,
+        p.brand
+       FROM purchase_invoice_items pii
+       JOIN purchase_invoices pi ON pii.purchase_invoice_id = pi.id
+       JOIN products p ON pii.product_id = p.id
+       LEFT JOIN suppliers s ON pi.supplier_id = s.id
+       WHERE p.name LIKE ?
+       ORDER BY pi.invoice_date DESC, pi.created_at DESC`,
+      [`%${productName}%`]
+    );
+    return rows;
+  },
+
   // Xóa hóa đơn (và hoàn trả tồn kho)
   delete: async (id) => {
     const connection = await db.getConnection();
