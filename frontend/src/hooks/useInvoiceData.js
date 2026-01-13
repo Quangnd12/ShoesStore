@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from '../contexts/ToastContext';
 
 export const useInvoiceData = (api, initialFilters = {}) => {
   const { showToast } = useToast();
-  const [invoices, setInvoices] = useState([]);
+  const [allInvoices, setAllInvoices] = useState([]); // Tất cả hóa đơn
   const [loading, setLoading] = useState(true);
+  
+  // Input filters (thay đổi ngay khi user gõ)
   const [filters, setFilters] = useState({
     invoiceNumber: "",
     supplier: "",
@@ -14,53 +16,43 @@ export const useInvoiceData = (api, initialFilters = {}) => {
     ...initialFilters
   });
 
-  // Pagination states
+  // Debounced filters (dùng để filter thực sự)
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  const isFirstRender = useRef(true);
+
+  // Pagination states - áp dụng SAU KHI filter
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
 
-  // Cache cho pagination
-  const [pageCache, setPageCache] = useState({});
+  // Cache
+  const [dataCache, setDataCache] = useState(null);
 
   // Accordion state
   const [expandedDates, setExpandedDates] = useState({});
 
+  // Fetch TẤT CẢ hóa đơn một lần
   const fetchInvoices = async (forceRefresh = false) => {
     try {
-      const cacheKey = JSON.stringify({
-        page: currentPage,
-        limit: itemsPerPage,
-        filters: filters,
-      });
+      // Kiểm tra cache (5 phút)
+      const CACHE_DURATION = 5 * 60 * 1000;
+      const now = Date.now();
 
-      if (!forceRefresh && pageCache[cacheKey]) {
-        const cached = pageCache[cacheKey];
-        setInvoices(cached.invoices);
-        setTotalPages(cached.totalPages);
+      if (!forceRefresh && dataCache && (now - dataCache.timestamp < CACHE_DURATION)) {
+        setAllInvoices(dataCache.invoices);
         setLoading(false);
         return;
       }
 
-      const response = await api.getAll({ 
-        page: currentPage,
-        limit: itemsPerPage 
+      setLoading(true);
+      const response = await api.getAll({ limit: 10000 }); // Lấy tất cả
+      
+      const invoicesData = response.data?.invoices || response.data || [];
+      
+      setAllInvoices(invoicesData);
+      setDataCache({
+        invoices: invoicesData,
+        timestamp: now,
       });
-      
-      const invoicesData = response.data?.invoices || [];
-      const total = response.data?.totalItems || invoicesData.length;
-      const pages = response.data?.totalPages || Math.ceil(total / itemsPerPage) || 1;
-      
-      setInvoices(invoicesData);
-      setTotalPages(pages);
-
-      setPageCache((prev) => ({
-        ...prev,
-        [cacheKey]: {
-          invoices: invoicesData,
-          totalPages: pages,
-          timestamp: Date.now(),
-        },
-      }));
     } catch (error) {
       console.error("Error fetching invoices:", error);
       showToast("Không thể tải danh sách hóa đơn", "error");
@@ -70,7 +62,7 @@ export const useInvoiceData = (api, initialFilters = {}) => {
   };
 
   const clearCache = () => {
-    setPageCache({});
+    setDataCache(null);
   };
 
   const handleDelete = async (id) => {
@@ -85,29 +77,30 @@ export const useInvoiceData = (api, initialFilters = {}) => {
     }
   };
 
+  // Filter tất cả hóa đơn
   const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const matchesInvoiceNumber = filters.invoiceNumber
+    return allInvoices.filter((invoice) => {
+      const matchesInvoiceNumber = debouncedFilters.invoiceNumber
         ? invoice.invoice_number
             ?.toLowerCase()
-            .includes(filters.invoiceNumber.toLowerCase())
+            .includes(debouncedFilters.invoiceNumber.toLowerCase())
         : true;
 
       const supplierName = invoice.supplier_name || "";
       const customerName = invoice.customer_name || invoice.account_username || "";
-      const matchesSupplier = filters.supplier
-        ? supplierName.toLowerCase().includes(filters.supplier.toLowerCase())
+      const matchesSupplier = debouncedFilters.supplier
+        ? supplierName.toLowerCase().includes(debouncedFilters.supplier.toLowerCase())
         : true;
-      const matchesCustomer = filters.customer
-        ? customerName.toLowerCase().includes(filters.customer.toLowerCase())
+      const matchesCustomer = debouncedFilters.customer
+        ? customerName.toLowerCase().includes(debouncedFilters.customer.toLowerCase())
         : true;
 
       const invoiceDate = invoice.invoice_date ? new Date(invoice.invoice_date) : null;
-      const matchesDateFrom = filters.dateFrom
-        ? invoiceDate && invoiceDate >= new Date(filters.dateFrom + "T00:00:00")
+      const matchesDateFrom = debouncedFilters.dateFrom
+        ? invoiceDate && invoiceDate >= new Date(debouncedFilters.dateFrom + "T00:00:00")
         : true;
-      const matchesDateTo = filters.dateTo
-        ? invoiceDate && invoiceDate <= new Date(filters.dateTo + "T23:59:59")
+      const matchesDateTo = debouncedFilters.dateTo
+        ? invoiceDate && invoiceDate <= new Date(debouncedFilters.dateTo + "T23:59:59")
         : true;
 
       return (
@@ -118,12 +111,25 @@ export const useInvoiceData = (api, initialFilters = {}) => {
         matchesDateTo
       );
     });
-  }, [invoices, filters]);
+  }, [allInvoices, debouncedFilters]);
 
+  // Tính totalPages dựa trên filteredInvoices
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredInvoices.length / itemsPerPage) || 1;
+  }, [filteredInvoices.length, itemsPerPage]);
+
+  // Paginate sau khi filter
+  const paginatedInvoices = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredInvoices.slice(startIndex, endIndex);
+  }, [filteredInvoices, currentPage, itemsPerPage]);
+
+  // Group theo ngày - chỉ group những hóa đơn đã paginate
   const groupedInvoices = useMemo(() => {
     const groups = {};
     
-    filteredInvoices.forEach((invoice) => {
+    paginatedInvoices.forEach((invoice) => {
       const dateKey = new Date(invoice.invoice_date).toLocaleDateString("vi-VN");
       
       if (!groups[dateKey]) {
@@ -138,14 +144,12 @@ export const useInvoiceData = (api, initialFilters = {}) => {
       
       groups[dateKey].invoices.push(invoice);
       
-      // Handle different total amount fields safely
       const totalCost = parseFloat(invoice.total_cost) || 0;
       const totalRevenue = parseFloat(invoice.total_revenue) || parseFloat(invoice.final_amount) || 0;
       
       groups[dateKey].totalCost += totalCost;
       groups[dateKey].totalRevenue += totalRevenue;
       
-      // Count total products
       if (invoice.items && Array.isArray(invoice.items)) {
         groups[dateKey].totalProducts += invoice.items.reduce((sum, item) => {
           return sum + (parseInt(item.quantity) || 0);
@@ -170,7 +174,7 @@ export const useInvoiceData = (api, initialFilters = {}) => {
       const dateB = new Date(yearB, monthB - 1, dayB);
       return dateB.getTime() - dateA.getTime();
     });
-  }, [filteredInvoices]);
+  }, [paginatedInvoices]);
 
   const toggleDate = (dateKey) => {
     setExpandedDates((prev) => ({
@@ -181,6 +185,8 @@ export const useInvoiceData = (api, initialFilters = {}) => {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    // Scroll to top khi chuyển trang
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleItemsPerPageChange = (newItemsPerPage) => {
@@ -189,25 +195,50 @@ export const useInvoiceData = (api, initialFilters = {}) => {
   };
 
   const clearFilters = () => {
-    setFilters({
+    const emptyFilters = {
       invoiceNumber: "",
       supplier: "",
       customer: "",
       dateFrom: "",
       dateTo: "",
-    });
+    };
+    setFilters(emptyFilters);
+    setDebouncedFilters(emptyFilters);
+    setCurrentPage(1);
   };
 
+  // Debounce filters - chờ 300ms sau khi user ngừng gõ
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  // Reset về trang 1 khi filter thay đổi
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setCurrentPage(1);
+    // Expand tất cả các ngày khi filter
+    setExpandedDates({});
+  }, [debouncedFilters]);
+
+  // Fetch data lần đầu
   useEffect(() => {
     fetchInvoices();
-  }, [currentPage, itemsPerPage]);
+  }, []);
 
   return {
     // Data
-    invoices,
+    invoices: paginatedInvoices,
     filteredInvoices,
     groupedInvoices,
     loading,
+    totalItems: filteredInvoices.length,
     
     // Pagination
     currentPage,
