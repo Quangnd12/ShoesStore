@@ -2,29 +2,7 @@ import { useState, useEffect } from "react";
 import { X, ZoomIn, Package, FileText, History } from "lucide-react";
 import { productsAPI, purchaseInvoicesAPI } from "../services/api";
 import ColorDisplay from "./ColorDisplay";
-
-// Simple Image Zoom - No animations
-const ImageZoom = ({ src, alt, onClose }) => {
-  useEffect(() => {
-    const handleKey = (e) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center" onClick={onClose}>
-      <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-full text-white">
-        <X size={24} />
-      </button>
-      <img
-        src={src}
-        alt={alt}
-        className="max-h-[90vh] max-w-[90vw] object-contain"
-        onClick={(e) => e.stopPropagation()}
-      />
-    </div>
-  );
-};
+import ImageZoomModal from "./ImageZoomModal";
 
 const ProductDetailModal = ({ product, onClose }) => {
   const [availableSizes, setAvailableSizes] = useState([]);
@@ -351,7 +329,12 @@ const ProductDetailModal = ({ product, onClose }) => {
       </div>
 
       {showZoom && product.image_url && (
-        <ImageZoom src={product.image_url} alt={product.name} onClose={() => setShowZoom(false)} />
+        <ImageZoomModal 
+          isOpen={showZoom}
+          onClose={() => setShowZoom(false)}
+          imageUrl={product.image_url}
+          altText={product.name}
+        />
       )}
     </>
   );

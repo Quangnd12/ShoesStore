@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Edit2 } from 'lucide-react';
 import GroupedProductVariants from '../GroupedProductVariants';
 import PurchaseInvoiceEditModal from './purchase/PurchaseInvoiceEditModal';
+import ImageZoomModal from '../ImageZoomModal';
 
 const InvoiceDetailModal = ({ 
   isOpen, 
@@ -11,12 +12,19 @@ const InvoiceDetailModal = ({
   onInvoiceUpdated
 }) => {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showImageZoom, setShowImageZoom] = useState(false);
+  const [selectedImage, setSelectedImage] = useState({ url: "", alt: "" });
 
   if (!isOpen || !invoice) return null;
 
   const handleEditSuccess = () => {
     setShowEditModal(false);
     onInvoiceUpdated?.();
+  };
+
+  const handleImageClick = (imageUrl, productName) => {
+    setSelectedImage({ url: imageUrl, alt: productName });
+    setShowImageZoom(true);
   };
 
   return (
@@ -208,7 +216,9 @@ const InvoiceDetailModal = ({
                               <img 
                                 src={item.image_url} 
                                 alt={item.product_name || item.name}
-                                className="w-12 h-12 object-cover rounded-lg border"
+                                className="w-12 h-12 object-cover rounded-lg border cursor-pointer hover:border-blue-400 transition-colors"
+                                onClick={() => handleImageClick(item.image_url, item.product_name || item.name)}
+                                title="Click để phóng to hình ảnh"
                                 onError={(e) => {
                                   e.target.style.display = 'none';
                                 }}
@@ -267,6 +277,14 @@ const InvoiceDetailModal = ({
           onSuccess={handleEditSuccess}
         />
       )}
+
+      {/* Image Zoom Modal */}
+      <ImageZoomModal
+        isOpen={showImageZoom}
+        onClose={() => setShowImageZoom(false)}
+        imageUrl={selectedImage.url}
+        altText={selectedImage.alt}
+      />
     </>
   );
 };

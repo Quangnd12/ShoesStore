@@ -36,6 +36,7 @@ Quick reference để tìm tài liệu nhanh chóng.
 - [Auto Increment Invoice Number](./docs/features/AUTO_INCREMENT_INVOICE_NUMBER.md)
 - [Product Pagination & Cache](./docs/features/PRODUCTS_PAGINATION_CACHE.md)
 - [Sales Invoice Search](./docs/features/SALES_INVOICE_SEARCHABLE_PRODUCT.md)
+- [Image Zoom Feature](./docs/features/IMAGE_ZOOM_FEATURE.md)
 
 ### 🔨 Bug Fixes
 - [Sales Invoices Debug](./docs/fixes/DEBUG_SALES_INVOICES.md)
@@ -69,11 +70,11 @@ Quick reference để tìm tài liệu nhanh chóng.
 
 ## 📊 Thống Kê Tài Liệu
 
-- **Tổng số file**: 40+ markdown files
+- **Tổng số file**: 41+ markdown files
 - **Deployment**: 1 guide
 - **User Guides**: 7 files
 - **Implementations**: 7 files
-- **Features**: 10 files
+- **Features**: 11 files
 - **Bug Fixes**: 9 files
 
 ## 🎯 Workflow Đọc Tài Liệu
@@ -132,4 +133,4 @@ ShoesStore/
 
 ---
 
-**Cập nhật**: December 4, 2025
+**Cập nhật**: January 23, 2026
