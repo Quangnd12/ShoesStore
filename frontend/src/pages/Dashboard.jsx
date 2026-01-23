@@ -38,6 +38,7 @@ import LowStockAlert from "../components/dashboard/LowStockAlert";
 import RevenueGrowth from "../components/dashboard/RevenueGrowth";
 import RecentActivities from "../components/dashboard/RecentActivities";
 import TopCategories from "../components/dashboard/TopCategories";
+import CategoryStats from "../components/dashboard/CategoryStats";
 import ProfitSummary from "../components/dashboard/ProfitSummary";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SkeletonLoader from "../components/SkeletonLoader";
@@ -473,6 +474,7 @@ const Dashboard = () => {
                 <TopCategories />
                 <RevenueGrowth />
               </div>
+              <CategoryStats />
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TopSellingProducts />
                 <OrdersByHour />

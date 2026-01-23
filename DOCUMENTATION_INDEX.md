@@ -37,6 +37,7 @@ Quick reference để tìm tài liệu nhanh chóng.
 - [Product Pagination & Cache](./docs/features/PRODUCTS_PAGINATION_CACHE.md)
 - [Sales Invoice Search](./docs/features/SALES_INVOICE_SEARCHABLE_PRODUCT.md)
 - [Image Zoom Feature](./docs/features/IMAGE_ZOOM_FEATURE.md)
+- [Top Categories Dashboard](./docs/features/TOP_CATEGORIES_DASHBOARD.md)
 
 ### 🔨 Bug Fixes
 - [Sales Invoices Debug](./docs/fixes/DEBUG_SALES_INVOICES.md)
@@ -70,11 +71,11 @@ Quick reference để tìm tài liệu nhanh chóng.
 
 ## 📊 Thống Kê Tài Liệu
 
-- **Tổng số file**: 41+ markdown files
+- **Tổng số file**: 42+ markdown files
 - **Deployment**: 1 guide
 - **User Guides**: 7 files
 - **Implementations**: 7 files
-- **Features**: 11 files
+- **Features**: 12 files
 - **Bug Fixes**: 9 files
 
 ## 🎯 Workflow Đọc Tài Liệu

@@ -258,9 +258,14 @@ const SalesInvoice = {
   // Lấy chi tiết hóa đơn bán
   getItems: async (invoiceId) => {
     const [rows] = await db.execute(
-      `SELECT sii.*, p.name as product_name, p.brand, p.image_url 
+      `SELECT sii.*, 
+              p.name as product_name, 
+              p.brand, 
+              p.image_url,
+              c.name as category_name
        FROM sales_invoice_items sii 
        LEFT JOIN products p ON sii.product_id = p.id 
+       LEFT JOIN categories c ON p.category_id = c.id
        WHERE sii.sales_invoice_id = ? AND sii.quantity > 0`,
       [invoiceId]
     );
