@@ -36,10 +36,10 @@ const QuickCheckout = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
-  
+
   // Categories collapse
   const [showAllCategories, setShowAllCategories] = useState(false);
-  
+
   // Customer info collapse
   const [showCustomerInfo, setShowCustomerInfo] = useState(false);
 
@@ -51,16 +51,22 @@ const QuickCheckout = () => {
     notes: "",
   });
 
+  // Price filter
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [priceFilterLoading, setPriceFilterLoading] = useState(false);
+  const [showPriceFilter, setShowPriceFilter] = useState(false);
+
   useEffect(() => {
     fetchProducts();
     fetchNextInvoiceNumber();
-    
+
     // Listen for invoice updates (from return/exchange)
     const handleInvoicesUpdated = () => {
       console.log("Invoices updated, refreshing products...");
       fetchProducts();
     };
-    
+
     window.addEventListener('invoices-updated', handleInvoicesUpdated);
     return () => window.removeEventListener('invoices-updated', handleInvoicesUpdated);
   }, []);
@@ -135,6 +141,11 @@ const QuickCheckout = () => {
   // Filter products
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
+      // Bỏ qua sản phẩm không có giá hoặc giá null
+      if (!product.price || product.price === null) {
+        return false;
+      }
+
       const matchesSearch = product.name
         ?.toLowerCase()
         .includes(searchTerm.toLowerCase());
@@ -142,9 +153,44 @@ const QuickCheckout = () => {
         selectedCategory === "all" ||
         product.category_name === selectedCategory;
       const hasStock = product.stock_quantity > 0;
-      return matchesSearch && matchesCategory && hasStock;
+
+      // Price filter
+      let matchesPrice = true;
+      if (minPrice !== "" || maxPrice !== "") {
+        const min = minPrice === "" ? 0 : parseFloat(minPrice);
+        const max = maxPrice === "" ? Infinity : parseFloat(maxPrice);
+        matchesPrice = product.price >= min && product.price <= max;
+      }
+
+      return matchesSearch && matchesCategory && hasStock && matchesPrice;
     });
-  }, [products, searchTerm, selectedCategory]);
+  }, [products, searchTerm, selectedCategory, minPrice, maxPrice]);
+
+  // Debounce price filter loading
+  useEffect(() => {
+    if (minPrice !== "" || maxPrice !== "") {
+      setPriceFilterLoading(true);
+      const timer = setTimeout(() => {
+        setPriceFilterLoading(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setPriceFilterLoading(false);
+    }
+  }, [minPrice, maxPrice]);
+
+  // Calculate price statistics
+  const priceStats = useMemo(() => {
+    if (filteredProducts.length === 0) {
+      return { min: 0, max: 0, count: 0 };
+    }
+    const prices = filteredProducts.map(p => p.price);
+    return {
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      count: filteredProducts.length,
+    };
+  }, [filteredProducts]);
 
   // Pagination
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
@@ -203,9 +249,9 @@ const QuickCheckout = () => {
   const addToCart = (product, selectedSize = null, quantity = 1) => {
     // Tạo unique key cho sản phẩm (id + size)
     const cartItemKey = selectedSize ? `${product.id}-${selectedSize}` : `${product.id}`;
-    
+
     const existingItem = cart.find((item) => item.cartItemKey === cartItemKey);
-    
+
     if (existingItem) {
       const newQuantity = existingItem.quantity + quantity;
       if (newQuantity <= product.stock_quantity) {
@@ -229,7 +275,7 @@ const QuickCheckout = () => {
             cartItemKey,
             selectedSize,
             quantity,
-            unit_price: product.price,
+            unit_price: product.unit_price || product.price, // Sử dụng unit_price nếu có (đã giảm giá), nếu không dùng price
           },
         ]);
         showToast("Đã thêm sản phẩm vào giỏ hàng", "success");
@@ -242,16 +288,16 @@ const QuickCheckout = () => {
   const updateQuantity = (cartItemKey, newQuantity) => {
     const cartItem = cart.find((item) => item.cartItemKey === cartItemKey);
     if (!cartItem) return;
-    
+
     const product = products.find((p) => p.id === cartItem.id);
     if (!product) return;
-    
+
     // Tính maxQuantity theo size
     const sizes = product.size ? product.size.split(',').map(s => s.trim()).filter(s => s) : [];
-    const maxQty = sizes.length > 0 
+    const maxQty = sizes.length > 0
       ? Math.max(1, Math.floor(product.stock_quantity / sizes.length))
       : product.stock_quantity;
-    
+
     if (newQuantity > maxQty) {
       showToast(`Số lượng tối đa cho size này là ${maxQty}`, "error");
       return;
@@ -361,7 +407,7 @@ const QuickCheckout = () => {
   return (
     <div className="h-[calc(105vh-120px)] flex flex-col">
       {/* Compact Header */}
-      
+
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 px-1 pb-4 min-h-0">
         {/* Left: Product List */}
         <div className="lg:col-span-3 bg-white rounded-lg shadow border border-gray-200 p-4 overflow-hidden flex flex-col min-h-0">
@@ -406,24 +452,130 @@ const QuickCheckout = () => {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {(showAllCategories 
-                    ? categoriesWithCount 
+                  {(showAllCategories
+                    ? categoriesWithCount
                     : categoriesWithCount.slice(0, 8)
                   ).map((cat) => (
                     <button
                       key={cat.name}
                       onClick={() => setSelectedCategory(cat.name)}
-                      className={`px-2 py-1 rounded-full text-xs font-medium transition flex items-center gap-1 ${
-                        selectedCategory === cat.name
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
+                      className={`px-2 py-1 rounded-full text-xs font-medium transition flex items-center gap-1 ${selectedCategory === cat.name
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
                     >
                       <span>{cat.label}</span>
                       <span className="text-xs opacity-75">({cat.count})</span>
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Price Filter */}
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Filter size={14} className="text-gray-500" />
+              <span className="text-xs text-gray-600 font-medium">Lọc theo giá:</span>
+              <button
+                onClick={() => setShowPriceFilter(!showPriceFilter)}
+                className="ml-auto text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+              >
+                {showPriceFilter ? (
+                  <>
+                    <span>Thu gọn</span>
+                    <ChevronUp size={12} />
+                  </>
+                ) : (
+                  <>
+                    <span>Mở rộng</span>
+                    <ChevronDown size={12} />
+                  </>
+                )}
+              </button>
+            </div>
+
+            {showPriceFilter && (
+              <div className="space-y-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600 mb-1 block">Giá tối thiểu</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={minPrice}
+                        onChange={(e) => setMinPrice(e.target.value)}
+                        className="w-full px-2 py-1.5 pr-6 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">₫</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 mb-1 block">Giá tối đa</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        placeholder="∞"
+                        value={maxPrice}
+                        onChange={(e) => setMaxPrice(e.target.value)}
+                        className="w-full px-2 py-1.5 pr-6 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">₫</span>
+                    </div>
+                  </div>
+                </div>
+
+                {priceFilterLoading && (
+                  <div className="flex items-center gap-2 text-xs text-blue-600">
+                    <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Đang lọc sản phẩm...</span>
+                  </div>
+                )}
+
+                {!priceFilterLoading && (minPrice !== "" || maxPrice !== "") && (
+                  <div className="bg-white p-2 rounded border border-gray-200">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600">Tìm thấy:</span>
+                      <span className="font-bold text-blue-600">{priceStats.count} sản phẩm</span>
+                    </div>
+                    {priceStats.count > 0 && (
+                      <>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-gray-600">Giá thấp nhất:</span>
+                          <span className="font-semibold text-green-600">
+                            {new Intl.NumberFormat("vi-VN").format(priceStats.min)}₫
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600">Giá cao nhất:</span>
+                          <span className="font-semibold text-orange-600">
+                            {new Intl.NumberFormat("vi-VN").format(priceStats.max)}₫
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {priceStats.count === 0 && (
+                      <div className="text-xs text-orange-600 mt-1">
+                        <p>❌ Không tìm thấy sản phẩm trong khoảng giá này.</p>
+                        <p className="mt-1 text-gray-600">💡 Gợi ý: Thử mở rộng khoảng giá hoặc xóa bộ lọc.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(minPrice !== "" || maxPrice !== "") && (
+                  <button
+                    onClick={() => {
+                      setMinPrice("");
+                      setMaxPrice("");
+                    }}
+                    className="w-full px-2 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-medium rounded transition"
+                  >
+                    Xóa bộ lọc giá
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -436,7 +588,7 @@ const QuickCheckout = () => {
                 const sizesInCart = cart
                   .filter(item => item.id === product.id && item.selectedSize)
                   .map(item => item.selectedSize);
-                
+
                 return (
                   <ProductCard
                     key={product.id}
@@ -519,11 +671,10 @@ const QuickCheckout = () => {
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-1 border rounded text-sm ${
-                          currentPage === page
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "border-gray-300 hover:bg-gray-100"
-                        }`}
+                        className={`px-3 py-1 border rounded text-sm ${currentPage === page
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "border-gray-300 hover:bg-gray-100"
+                          }`}
                       >
                         {page}
                       </button>
@@ -603,7 +754,7 @@ const QuickCheckout = () => {
                 <ChevronDown size={14} />
               )}
             </button>
-            
+
             {showCustomerInfo && (
               <div className="mt-2 space-y-1.5">
                 <input
@@ -647,22 +798,19 @@ const QuickCheckout = () => {
           <div
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            className={`border-2 border-dashed rounded p-2 mb-2 transition-all ${
-              draggedProduct
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300 bg-gray-50"
-            }`}
+            className={`border-2 border-dashed rounded p-2 mb-2 transition-all ${draggedProduct
+              ? "border-blue-500 bg-blue-50"
+              : "border-gray-300 bg-gray-50"
+              }`}
           >
             <div className="text-center">
               <Package
                 size={20}
-                className={`mx-auto mb-1 ${
-                  draggedProduct ? "text-blue-500 animate-bounce" : "text-gray-400"
-                }`}
+                className={`mx-auto mb-1 ${draggedProduct ? "text-blue-500 animate-bounce" : "text-gray-400"
+                  }`}
               />
-              <p className={`text-xs ${
-                draggedProduct ? "text-blue-600 font-medium" : "text-gray-600"
-              }`}>
+              <p className={`text-xs ${draggedProduct ? "text-blue-600 font-medium" : "text-gray-600"
+                }`}>
                 {draggedProduct ? "Thả vào đây!" : "Kéo thả sản phẩm"}
               </p>
             </div>
@@ -683,10 +831,10 @@ const QuickCheckout = () => {
                 // Tính maxQuantity cho mỗi item dựa trên size
                 const product = products.find(p => p.id === item.id);
                 const sizes = product?.size ? product.size.split(',').map(s => s.trim()).filter(s => s) : [];
-                const maxQty = sizes.length > 0 
+                const maxQty = sizes.length > 0
                   ? Math.max(1, Math.floor((product?.stock_quantity || 99) / sizes.length))
                   : (product?.stock_quantity || 99);
-                
+
                 return (
                   <CartItem
                     key={item.cartItemKey}
@@ -727,11 +875,10 @@ const QuickCheckout = () => {
             <button
               onClick={handleCheckout}
               disabled={cart.length === 0}
-              className={`w-full py-2.5 rounded font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${
-                cart.length === 0
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 hover:shadow-lg active:scale-95"
-              }`}
+              className={`w-full py-2.5 rounded font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${cart.length === 0
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 hover:shadow-lg active:scale-95"
+                }`}
             >
               <CreditCard size={16} />
               <span className="text-sm">

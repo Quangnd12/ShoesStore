@@ -14,6 +14,7 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
   const [selectedSize, setSelectedSize] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [maxQuantity, setMaxQuantity] = useState(1);
+  const [discount, setDiscount] = useState(0);
 
   // Reset state khi mở modal mới
   useEffect(() => {
@@ -21,6 +22,7 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
       setSelectedSize(null);
       setQuantity(1);
       setMaxQuantity(1);
+      setDiscount(0);
     }
   }, [isOpen, product?.id]);
 
@@ -46,14 +48,14 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
     if (product.availableSizes && product.availableSizes.length > 0) {
       return product.availableSizes;
     }
-    
+
     // Fallback: parse từ chuỗi
     if (product.size) {
       const sizes = product.size.split(',').map(s => s.trim()).filter(s => s);
       const qtyPerSize = Math.floor(product.stock_quantity / sizes.length) || 1;
       return sizes.map(s => ({ size: s, quantity: qtyPerSize }));
     }
-    
+
     return [];
   };
 
@@ -86,22 +88,30 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
     if (hasSizes && !selectedSize) {
       return;
     }
-    
+
+    // Tính giá sau khi giảm
+    const discountedPrice = product.price - discount;
+
     onConfirm({
       ...product,
       selectedSize: selectedSize,
       quantity: quantity,
       maxQuantityPerSize: getSelectedSizeQuantity(),
+      unit_price: discountedPrice, // Giá sau khi giảm
+      original_price: product.price, // Giá gốc (để tham khảo)
+      discount: discount, // Số tiền giảm
     });
-    
+
     setSelectedSize(null);
     setQuantity(1);
+    setDiscount(0);
     onClose();
   };
 
   const handleClose = () => {
     setSelectedSize(null);
     setQuantity(1);
+    setDiscount(0);
     onClose();
   };
 
@@ -121,11 +131,11 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
   const currentMaxQuantity = getSelectedSizeQuantity();
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleClose}
     >
-      <div 
+      <div
         className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all"
         onClick={(e) => e.stopPropagation()}
       >
@@ -169,9 +179,9 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
               <div className="flex items-center gap-2 mb-3">
                 {product.color && (
                   <div className="flex items-center gap-1.5 bg-gray-100 px-2 py-1 rounded-full">
-                    <ColorDisplay 
-                      color={product.color} 
-                      size="sm" 
+                    <ColorDisplay
+                      color={product.color}
+                      size="sm"
                       showLabel={false}
                       style="circle"
                     />
@@ -186,11 +196,10 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
                 <span className="text-2xl font-bold text-blue-600">
                   {new Intl.NumberFormat("vi-VN").format(product.price)}₫
                 </span>
-                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                  product.stock_quantity < 10 
-                    ? "bg-orange-100 text-orange-700" 
-                    : "bg-green-100 text-green-700"
-                }`}>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${product.stock_quantity < 10
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-green-100 text-green-700"
+                  }`}>
                   Còn {product.stock_quantity}
                 </span>
               </div>
@@ -217,7 +226,7 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
                 const inCart = isSizeInCart(size);
                 const isSelected = selectedSize === size;
                 const isOutOfStock = sizeQty <= 0;
-                
+
                 // Ẩn size đã hết hàng hoặc đã trong giỏ
                 if (isOutOfStock || inCart) {
                   return (
@@ -241,17 +250,16 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
                     </button>
                   );
                 }
-                
+
                 return (
                   <button
                     key={size}
                     type="button"
                     onClick={() => setSelectedSize(size)}
-                    className={`min-w-[52px] px-4 py-2.5 rounded-xl border-2 text-sm font-bold transition-all duration-200 relative ${
-                      isSelected
-                        ? "border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-200 scale-105"
-                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50"
-                    }`}
+                    className={`min-w-[52px] px-4 py-2.5 rounded-xl border-2 text-sm font-bold transition-all duration-200 relative ${isSelected
+                      ? "border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-200 scale-105"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50"
+                      }`}
                   >
                     <span>{size}</span>
                     <span className={`block text-[10px] mt-0.5 ${isSelected ? 'text-blue-100' : 'text-gray-400'}`}>
@@ -261,7 +269,7 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
                 );
               })}
             </div>
-            
+
             {/* Thông báo */}
             {!selectedSize && remainingSizes.length > 0 && (
               <p className="text-xs text-orange-600 mt-3 flex items-center gap-1">
@@ -278,54 +286,109 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
           </div>
         )}
 
-        {/* Quantity */}
+        {/* Quantity & Discount */}
         <div className="p-5 border-b border-gray-100">
-          <label className="block text-sm font-bold text-gray-800 mb-3">
-            Số lượng
-          </label>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center bg-gray-100 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={decrementQuantity}
-                disabled={quantity <= 1}
-                className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <Minus size={18} />
-              </button>
-              <input
-                type="number"
-                min="1"
-                max={currentMaxQuantity}
-                value={quantity}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 1;
-                  setQuantity(Math.min(Math.max(1, val), currentMaxQuantity));
-                }}
-                className="w-16 h-12 text-center bg-transparent font-bold text-lg focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={incrementQuantity}
-                disabled={quantity >= currentMaxQuantity}
-                className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <Plus size={18} />
-              </button>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Số lượng */}
+            <div>
+              <label className="block text-sm font-bold text-gray-800 mb-3">
+                Số lượng
+              </label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center bg-gray-100 rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={decrementQuantity}
+                    disabled={quantity <= 1}
+                    className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max={currentMaxQuantity}
+                    value={quantity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1;
+                      setQuantity(Math.min(Math.max(1, val), currentMaxQuantity));
+                    }}
+                    className="w-14 h-10 text-center bg-transparent font-bold text-base focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={incrementQuantity}
+                    disabled={quantity >= currentMaxQuantity}
+                    className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+                <span className="text-xs text-gray-500 text-center">
+                  (Tối đa: {currentMaxQuantity})
+                </span>
+              </div>
             </div>
-            <span className="text-sm text-gray-500">
-              (Tối đa: {currentMaxQuantity})
-            </span>
+
+            {/* Giảm giá */}
+            <div>
+              <label className="block text-sm font-bold text-gray-800 mb-3">
+                Giảm giá
+              </label>
+              <div className="flex flex-col gap-2">
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max={product.price}
+                    value={discount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setDiscount(Math.min(Math.max(0, val), product.price));
+                    }}
+                    placeholder="0"
+                    className="w-full h-10 pl-3 pr-8 bg-gray-100 rounded-xl font-bold text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">₫</span>
+                </div>
+                <span className="text-xs text-gray-500 text-center">
+                  (Tối đa: {new Intl.NumberFormat("vi-VN").format(product.price)}₫)
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Total & Actions */}
         <div className="p-5 bg-gradient-to-r from-gray-50 to-blue-50">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-gray-600 font-medium">Tạm tính:</span>
-            <span className="text-2xl font-bold text-blue-600">
-              {new Intl.NumberFormat("vi-VN").format(product.price * quantity)}₫
-            </span>
+          <div className="space-y-2 mb-5">
+            {/* Giá gốc */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Giá gốc:</span>
+              <span className="text-base font-semibold text-gray-700">
+                {new Intl.NumberFormat("vi-VN").format(product.price * quantity)}₫
+              </span>
+            </div>
+
+            {/* Giảm giá (nếu có) */}
+            {discount > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-orange-600">Giảm giá:</span>
+                <span className="text-base font-semibold text-orange-600">
+                  - {new Intl.NumberFormat("vi-VN").format(discount * quantity)}₫
+                </span>
+              </div>
+            )}
+
+            {/* Đường kẻ ngang */}
+            <div className="border-t border-gray-300 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-700 font-bold">Tạm tính:</span>
+                <span className="text-2xl font-bold text-blue-600">
+                  {new Intl.NumberFormat("vi-VN").format((product.price - discount) * quantity)}₫
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Actions */}
@@ -341,11 +404,10 @@ const SizeSelectModal = ({ product, isOpen, onClose, onConfirm, cartItems = [] }
               type="button"
               onClick={handleConfirm}
               disabled={(hasSizes && !selectedSize) || remainingSizes.length === 0}
-              className={`flex-1 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${
-                (hasSizes && !selectedSize) || remainingSizes.length === 0
-                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-300 active:scale-95"
-              }`}
+              className={`flex-1 px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-200 ${(hasSizes && !selectedSize) || remainingSizes.length === 0
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg hover:shadow-blue-300 active:scale-95"
+                }`}
             >
               <ShoppingCart size={18} />
               Thêm vào giỏ
