@@ -37,7 +37,7 @@ const ReturnExchange = {
       for (const item of items) {
         // Lấy thông tin item gốc từ hóa đơn
         const [originalItemRows] = await connection.execute(
-          `SELECT sii.*, p.id as product_id, p.size, p.price as product_price 
+          `SELECT sii.*, sii.size_eu, p.id as product_id, p.size, p.price as product_price 
            FROM sales_invoice_items sii 
            JOIN products p ON sii.product_id = p.id 
            WHERE sii.id = ? AND sii.sales_invoice_id = ?`,
@@ -77,6 +77,33 @@ const ReturnExchange = {
           [item.quantity, originalItem.product_id]
         );
 
+        // Hoàn trả tồn kho theo size nếu có bảng product_sizes
+        // Ưu tiên size_eu từ sales_invoice_items (size cụ thể đã mua)
+        const originalSize = originalItem.size_eu;
+        if (originalSize && originalSize.trim()) {
+          try {
+            const [tableCheck] = await connection.execute(
+              `SELECT 1 FROM information_schema.tables 
+               WHERE table_schema = DATABASE() AND table_name = 'product_sizes' LIMIT 1`
+            );
+            
+            if (tableCheck.length > 0) {
+              // Chỉ update nếu size_value là size đơn lẻ (không phải chuỗi nhiều size)
+              const sizeValue = originalSize.trim();
+              if (!sizeValue.includes(',')) {
+                await connection.execute(
+                  `INSERT INTO product_sizes (product_id, size_value, quantity)
+                   VALUES (?, ?, ?)
+                   ON DUPLICATE KEY UPDATE quantity = quantity + ?, updated_at = CURRENT_TIMESTAMP`,
+                  [originalItem.product_id, sizeValue, item.quantity, item.quantity]
+                );
+              }
+            }
+          } catch (sizeError) {
+            console.log('product_sizes table not available, skipping size tracking');
+          }
+        }
+
         // Xử lý theo loại: return hoặc exchange
         if (type === "exchange" && item.new_product_id) {
           // === ĐỔI HÀNG ===
@@ -105,8 +132,32 @@ const ReturnExchange = {
             [item.quantity, item.new_product_id]
           );
 
+          // Trừ tồn kho theo size cho sản phẩm mới nếu có bảng product_sizes
+          // Ưu tiên new_size từ frontend (size cụ thể user đã chọn)
+          const newSizeValue = item.new_size || (newProduct.size && !newProduct.size.includes(',') ? newProduct.size.trim() : null);
+          if (newSizeValue) {
+            try {
+              const [tableCheck] = await connection.execute(
+                `SELECT 1 FROM information_schema.tables 
+                 WHERE table_schema = DATABASE() AND table_name = 'product_sizes' LIMIT 1`
+              );
+              
+              if (tableCheck.length > 0) {
+                await connection.execute(
+                  `UPDATE product_sizes 
+                   SET quantity = GREATEST(0, quantity - ?), updated_at = CURRENT_TIMESTAMP
+                   WHERE product_id = ? AND size_value = ?`,
+                  [item.quantity, item.new_product_id, newSizeValue]
+                );
+              }
+            } catch (sizeError) {
+              console.log('product_sizes table not available, skipping size tracking');
+            }
+          }
+
           // **CẬP NHẬT sales_invoice_items với sản phẩm mới**
-          const newSize = newProduct.size ? String(newProduct.size) : null;
+          // Sử dụng new_size từ frontend nếu có, không thì dùng size của product
+          const newSize = newSizeValue || (newProduct.size ? String(newProduct.size) : null);
           const newUnitPrice = item.new_unit_price || newProduct.price; // Cho phép điều chỉnh giá
           const newTotalPrice = newUnitPrice * item.quantity;
 

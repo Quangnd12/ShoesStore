@@ -3,8 +3,8 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import ProductsEnhanced from "./pages/ProductsEnhanced";
 import Suppliers from "./pages/Suppliers";
-import PurchaseInvoices from "./pages/PurchaseInvoices";
-import SalesInvoices from "./pages/SalesInvoices";
+import PurchaseInvoicesRefactored from "./pages/PurchaseInvoicesRefactored";
+import SalesInvoicesRefactored from "./pages/SalesInvoicesRefactored";
 import QuickCheckout from "./pages/QuickCheckout";
 import Login from "./pages/Login";
 
@@ -17,8 +17,8 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="products" element={<ProductsEnhanced />} />
           <Route path="suppliers" element={<Suppliers />} />
-          <Route path="purchase-invoices" element={<PurchaseInvoices />} />
-          <Route path="sales-invoices" element={<SalesInvoices />} />
+          <Route path="purchase-invoices" element={<PurchaseInvoicesRefactored />} />
+          <Route path="sales-invoices" element={<SalesInvoicesRefactored />} />
           <Route path="quick-checkout" element={<QuickCheckout />} />
         </Route>
       </Routes>

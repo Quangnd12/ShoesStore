@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Package } from "lucide-react";
+import ImageZoomModal from "./ImageZoomModal";
 
 const GroupedProductVariants = ({ items }) => {
   const [expandedProducts, setExpandedProducts] = useState({});
+  const [showImageZoom, setShowImageZoom] = useState(false);
+  const [selectedImage, setSelectedImage] = useState({ url: "", alt: "" });
 
   // Nhóm items theo tên sản phẩm
   const groupedProducts = items.reduce((acc, item) => {
@@ -42,6 +45,11 @@ const GroupedProductVariants = ({ items }) => {
     }));
   };
 
+  const handleImageClick = (imageUrl, productName) => {
+    setSelectedImage({ url: imageUrl, alt: productName });
+    setShowImageZoom(true);
+  };
+
   return (
     <div className="space-y-3">
       {productGroups.map((group, index) => {
@@ -64,7 +72,12 @@ const GroupedProductVariants = ({ items }) => {
                     <img
                       src={group.image_url}
                       alt={group.name}
-                      className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 shadow-sm flex-shrink-0"
+                      className="w-20 h-20 object-cover rounded-lg border-2 border-blue-200 shadow-sm flex-shrink-0 cursor-pointer hover:border-blue-400 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleImageClick(group.image_url, group.name);
+                      }}
+                      title="Click để phóng to hình ảnh"
                     />
                   ) : (
                     <div className="flex items-center justify-center w-20 h-20 bg-gray-100 rounded-lg border-2 border-gray-200 shadow-sm flex-shrink-0">
@@ -189,6 +202,14 @@ const GroupedProductVariants = ({ items }) => {
           </div>
         );
       })}
+
+      {/* Image Zoom Modal */}
+      <ImageZoomModal
+        isOpen={showImageZoom}
+        onClose={() => setShowImageZoom(false)}
+        imageUrl={selectedImage.url}
+        altText={selectedImage.alt}
+      />
     </div>
   );
 };

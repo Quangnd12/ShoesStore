@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, X } from "lucide-react";
-import SizeGenerator from "./SizeGenerator";
+import ColorVariantManager from "./ColorVariantManager";
 import GroupedSearchableSelect from "./GroupedSearchableSelect";
 import SearchableSelect from "./SearchableSelect";
-import ColorPicker from "./ColorPicker";
-import ImageUploadWithColorDetection from "./ImageUploadWithColorDetection";
+import SmartPriceInput from "./SmartPriceInput";
 
 const ProductTabsInvoice = ({ 
   items, 
@@ -21,6 +20,63 @@ const ProductTabsInvoice = ({
 }) => {
   const [activeProductIndex, setActiveProductIndex] = useState(0);
 
+  // Get category name for product context
+  const getCategoryName = (categoryId) => {
+    const category = categories.find(c => c.id === parseInt(categoryId));
+    return category?.name || '';
+  };
+
+  // Chuyển đổi từ cấu trúc cũ (variants) sang cấu trúc mới (colorVariants)
+  const convertToColorVariants = (item) => {
+    if (item.colorVariants && item.colorVariants.length > 0) {
+      return item.colorVariants;
+    }
+    
+    // Nếu có variants cũ, chuyển đổi sang colorVariants
+    if (item.variants && item.variants.length > 0) {
+      // Nhóm variants theo màu
+      const colorGroups = {};
+      item.variants.forEach(v => {
+        const color = v.color || item.color || "";
+        if (!colorGroups[color]) {
+          colorGroups[color] = {
+            color: color,
+            image: item.image_url || "",
+            image_file: null,
+            sizes: []
+          };
+        }
+        colorGroups[color].sizes.push({
+          size: v.size || "",
+          quantity: v.quantity || "",
+          unit_cost: v.unit_cost || ""
+        });
+      });
+      
+      const result = Object.values(colorGroups);
+      return result.length > 0 ? result : [{ color: "", image: "", image_file: null, sizes: [{ size: "", quantity: "", unit_cost: "" }] }];
+    }
+    
+    return [{ color: "", image: "", image_file: null, sizes: [{ size: "", quantity: "", unit_cost: "" }] }];
+  };
+
+  // Chuyển đổi từ colorVariants sang variants (để tương thích với API cũ)
+  const convertToVariants = (colorVariants) => {
+    const variants = [];
+    colorVariants.forEach(cv => {
+      cv.sizes?.forEach(s => {
+        variants.push({
+          size: s.size,
+          quantity: s.quantity,
+          unit_cost: s.unit_cost,
+          color: cv.color,
+          image_url: cv.image
+        });
+      });
+    });
+    return variants;
+  };
+
   const handleAddProduct = () => {
     const newTabs = [...tabs];
     newTabs[tabIndex].data.items.push({
@@ -28,9 +84,16 @@ const ProductTabsInvoice = ({
       name: "",
       price: "",
       category_id: "",
-      image_url: "",
       brand: "",
+      image_url: "",
       color: "",
+      // Hỗ trợ cả 2 cấu trúc
+      colorVariants: [{ 
+        color: "", 
+        image: "", 
+        image_file: null,
+        sizes: [{ size: "", quantity: "", unit_cost: "" }] 
+      }],
       variants: [{ size: "", quantity: "", unit_cost: "" }],
     });
     setTabs(newTabs);
@@ -167,15 +230,17 @@ const ProductTabsInvoice = ({
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Giá bán *
                 </label>
-                <input
-                  type="number"
-                  required={!currentItem.product_id}
+                <SmartPriceInput
                   value={currentItem.price}
-                  onChange={(e) =>
-                    handleItemChange(tabIndex, itemIndex, "price", e.target.value)
-                  }
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
-                  placeholder="0"
+                  onChange={(value) => handleItemChange(tabIndex, itemIndex, "price", value)}
+                  placeholder="Nhập giá bán (VD: 100 → 100.000đ)"
+                  unit="đ"
+                  productContext={{
+                    category: getCategoryName(currentItem.category_id),
+                    name: currentItem.name
+                  }}
+                  className="border-2 border-gray-300 focus:border-blue-500 py-2.5 transition-all"
+                  required={!currentItem.product_id}
                 />
               </div>
               <div>
@@ -192,145 +257,39 @@ const ProductTabsInvoice = ({
                   placeholder="Nhập thương hiệu"
                 />
               </div>
-              <div className="col-span-2">
-                <ImageUploadWithColorDetection
-                  imageUrl={currentItem.image_url}
-                  onImageChange={(file, imageSrc) => {
-                    handleImageFileChange(tabIndex, itemIndex, file);
-                  }}
-                  onColorDetected={(colorName, colorHex) => {
-                    handleItemChange(tabIndex, itemIndex, "color", colorName);
-                  }}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Màu sắc
-                </label>
-                <ColorPicker
-                  value={currentItem.color || ""}
-                  onChange={(color) => handleItemChange(tabIndex, itemIndex, "color", color)}
-                  imageUrl={currentItem.image_url}
-                  className="w-full"
-                />
-              </div>
             </>
           )}
         </div>
 
-        {/* Variants (nhiều size) */}
+        {/* Color Variants Management - Quản lý biến thể theo màu sắc */}
         <div className="border-t-2 border-gray-200 pt-6">
-          <div className="flex justify-between items-center mb-4">
-            <label className="block text-sm font-semibold text-gray-700">
-              Biến thể (Size) *
-            </label>
-            <button
-              type="button"
-              onClick={() => handleAddVariant(tabIndex, itemIndex)}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline"
-            >
-              + Thêm size
-            </button>
-          </div>
-
-          {/* Size Generator */}
-          <div className="mb-4">
-            <SizeGenerator
-              onGenerate={(variants) => {
-                const newTabs = [...tabs];
-                newTabs[tabIndex].data.items[itemIndex].variants = variants;
-                setTabs(newTabs);
-              }}
-            />
-          </div>
-
-          {/* Variants List */}
-          <div className="space-y-3">
-            {currentItem.variants &&
-              currentItem.variants.map((variant, variantIndex) => (
-                <div
-                  key={variantIndex}
-                  className="grid grid-cols-4 gap-3 p-3 bg-white rounded-lg border-2 border-gray-200 hover:border-blue-300 transition-all"
-                >
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Size *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={variant.size}
-                      onChange={(e) =>
-                        handleVariantChange(
-                          tabIndex,
-                          itemIndex,
-                          variantIndex,
-                          "size",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder="38"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Số lượng *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={variant.quantity}
-                      onChange={(e) =>
-                        handleVariantChange(
-                          tabIndex,
-                          itemIndex,
-                          variantIndex,
-                          "quantity",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder="10"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Giá nhập *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={variant.unit_cost}
-                      onChange={(e) =>
-                        handleVariantChange(
-                          tabIndex,
-                          itemIndex,
-                          variantIndex,
-                          "unit_cost",
-                          e.target.value
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                      placeholder="100000"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    {currentItem.variants.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleRemoveVariant(tabIndex, itemIndex, variantIndex)
-                        }
-                        className="w-full px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors text-sm font-medium"
-                      >
-                        Xóa
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-          </div>
+          <ColorVariantManager
+            colorVariants={convertToColorVariants(currentItem)}
+            onColorVariantsChange={(newColorVariants) => {
+              const newTabs = [...tabs];
+              // Cập nhật cả colorVariants và variants để tương thích
+              newTabs[tabIndex].data.items[itemIndex].colorVariants = newColorVariants;
+              newTabs[tabIndex].data.items[itemIndex].variants = convertToVariants(newColorVariants);
+              
+              // Cập nhật image_url và color từ màu đầu tiên (cho tương thích ngược)
+              if (newColorVariants.length > 0) {
+                newTabs[tabIndex].data.items[itemIndex].image_url = newColorVariants[0].image || "";
+                newTabs[tabIndex].data.items[itemIndex].color = newColorVariants[0].color || "";
+              }
+              
+              setTabs(newTabs);
+            }}
+            productContext={{
+              category: getCategoryName(currentItem.category_id),
+              name: currentItem.name
+            }}
+            onImageFileChange={(colorIndex, file) => {
+              // Callback để xử lý upload hình ảnh
+              if (handleImageFileChange) {
+                handleImageFileChange(tabIndex, itemIndex, file, colorIndex);
+              }
+            }}
+          />
         </div>
       </div>
     </div>

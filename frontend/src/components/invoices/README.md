@@ -1,200 +1,94 @@
 # Invoice Components Refactoring
 
-## Tổng quan
+## Vấn đề trước khi refactor:
+- File `PurchaseInvoices.jsx` và `SalesInvoices.jsx` quá dài (>1500 dòng mỗi file)
+- Quá nhiều state và logic trong một component
+- Khó bảo trì và debug
+- Code lặp lại giữa hai file
+- UI components phức tạp được viết inline
 
-Dự án này đã được tái cấu trúc để tách các component hóa đơn thành các phần nhỏ hơn, dễ bảo trì và tái sử dụng. Thay vì có 2 file lớn (PurchaseInvoices: 1418 dòng, SalesInvoices: 1699 dòng), chúng ta đã tách thành nhiều component nhỏ với chức năng rõ ràng.
+## Cấu trúc mới:
 
-## Cấu trúc thư mục
+### 1. Shared Components (Dùng chung)
+- `InvoiceFilters.jsx` - Bộ lọc hóa đơn
+- `InvoiceList.jsx` - Danh sách hóa đơn với accordion
+- `InvoiceDetailModal.jsx` - Modal xem chi tiết hóa đơn
+- `PaginationControls.jsx` - Điều khiển phân trang
 
-```
-frontend/src/components/invoices/
-├── shared/                     # Components dùng chung
-│   ├── InvoiceFilters.jsx     # Bộ lọc hóa đơn
-│   ├── InvoicePagination.jsx  # Phân trang
-│   ├── InvoiceAccordion.jsx   # Hiển thị danh sách theo ngày
-│   └── InvoiceDetailModal.jsx # Modal xem chi tiết
-├── purchase/                   # Components cho hóa đơn nhập
-│   ├── PurchaseInvoiceForm.jsx
-│   ├── PurchaseInvoiceItem.jsx
-│   └── PurchaseInvoiceVariants.jsx
-├── sales/                      # Components cho hóa đơn bán
-│   ├── SalesInvoiceForm.jsx
-│   ├── SalesInvoiceItem.jsx
-│   └── ReturnExchangeModal.jsx
-└── README.md
-```
+### 2. Purchase Invoice Components
+- `purchase/PurchaseInvoiceForm.jsx` - Form tạo hóa đơn nhập
 
-## Custom Hooks
+### 3. Sales Invoice Components  
+- `sales/SalesInvoiceForm.jsx` - Form tạo hóa đơn bán
+- `sales/ReturnExchangeModal.jsx` - Modal hoàn trả/đổi hàng
 
-```
-frontend/src/hooks/
-├── useInvoices.js        # Quản lý danh sách hóa đơn, filters, pagination
-└── useInvoiceModal.js    # Quản lý modal tạo hóa đơn và tabs
-```
+### 4. Custom Hooks
+- `useInvoiceData.js` - Logic chung cho quản lý data hóa đơn
+- `usePurchaseInvoice.js` - Logic riêng cho hóa đơn nhập
+- `useSalesInvoice.js` - Logic riêng cho hóa đơn bán
 
-## Lợi ích của việc tái cấu trúc
+### 5. Refactored Pages
+- `PurchaseInvoicesRefactored.jsx` - Trang hóa đơn nhập mới
+- `SalesInvoicesRefactored.jsx` - Trang hóa đơn bán mới
 
-### 1. **Tách biệt trách nhiệm (Separation of Concerns)**
-- Mỗi component chỉ đảm nhiệm một chức năng cụ thể
-- Logic được tách ra thành custom hooks
-- Dễ dàng test từng phần riêng biệt
+## Lợi ích:
 
-### 2. **Tái sử dụng code (Code Reusability)**
-- Shared components có thể dùng cho cả Purchase và Sales
-- Custom hooks có thể tái sử dụng cho các trang khác
-- Giảm thiểu code trùng lặp
+### 1. Dễ bảo trì
+- Mỗi component có trách nhiệm rõ ràng
+- Logic được tách riêng vào custom hooks
+- Code ngắn gọn, dễ đọc
 
-### 3. **Dễ bảo trì (Maintainability)**
-- File nhỏ hơn, dễ đọc và hiểu
-- Thay đổi một chức năng không ảnh hưởng đến các phần khác
-- Dễ dàng thêm tính năng mới
+### 2. Tái sử dụng
+- Shared components có thể dùng cho cả hai loại hóa đơn
+- Custom hooks có thể mở rộng cho các tính năng khác
 
-### 4. **Performance tốt hơn**
-- Component nhỏ render nhanh hơn
-- Có thể lazy load từng component khi cần
-- Tối ưu hóa re-render
+### 3. Dễ test
+- Mỗi component nhỏ dễ viết unit test
+- Logic tách riêng dễ test riêng biệt
 
-## Cách sử dụng
+### 4. Performance
+- Chỉ re-render component cần thiết
+- Lazy loading có thể áp dụng dễ dàng
 
-### 1. Import các component cần thiết:
+## Cách sử dụng:
 
-```jsx
-import InvoiceFilters from "../components/invoices/shared/InvoiceFilters";
-import InvoicePagination from "../components/invoices/shared/InvoicePagination";
-import InvoiceAccordion from "../components/invoices/shared/InvoiceAccordion";
-import PurchaseInvoiceForm from "../components/invoices/purchase/PurchaseInvoiceForm";
-```
-
-### 2. Sử dụng custom hooks:
-
-```jsx
-import { useInvoices } from "../hooks/useInvoices";
-import { useInvoiceModal } from "../hooks/useInvoiceModal";
-
-const MyComponent = () => {
-  const {
-    invoices,
-    loading,
-    filters,
-    setFilters,
-    groupedInvoices,
-    refreshInvoices,
-  } = useInvoices(purchaseInvoicesAPI, "purchase");
-
-  const {
-    showModal,
-    tabs,
-    activeTabIndex,
-    handleAddTab,
-    handleTabClose,
-    openModal,
-  } = useInvoiceModal(purchaseInvoicesAPI, "purchase");
-
-  // ... rest of component
-};
-```
-
-## Migration Guide
-
-### Để chuyển từ file cũ sang cấu trúc mới:
-
-1. **Thay thế import trong App.jsx hoặc router:**
-```jsx
-// Cũ
-import PurchaseInvoices from "./pages/PurchaseInvoices";
-import SalesInvoices from "./pages/SalesInvoices";
-
-// Mới
-import PurchaseInvoices from "./pages/PurchaseInvoicesRefactored";
-import SalesInvoices from "./pages/SalesInvoicesRefactored";
-```
-
-2. **Kiểm tra và test các chức năng:**
-- Tạo hóa đơn mới
-- Xem chi tiết hóa đơn
-- Lọc và phân trang
-- Import/Export Excel
-- Hoàn trả/đổi hàng (Sales)
-
-3. **Xóa file cũ sau khi đã test kỹ:**
+### Thay thế file cũ:
 ```bash
-rm frontend/src/pages/PurchaseInvoices.jsx
-rm frontend/src/pages/SalesInvoices.jsx
+# Backup file cũ
+mv frontend/src/pages/PurchaseInvoices.jsx frontend/src/pages/PurchaseInvoices.jsx.backup
+mv frontend/src/pages/SalesInvoices.jsx frontend/src/pages/SalesInvoices.jsx.backup
+
+# Sử dụng file mới
+mv frontend/src/pages/PurchaseInvoicesRefactored.jsx frontend/src/pages/PurchaseInvoices.jsx
+mv frontend/src/pages/SalesInvoicesRefactored.jsx frontend/src/pages/SalesInvoices.jsx
 ```
 
-## Component Props
-
-### InvoiceFilters
-```jsx
-<InvoiceFilters
-  filters={filters}                    // Object: current filter values
-  onFiltersChange={setFilters}         // Function: update filters
-  onClearFilters={clearFilters}        // Function: clear all filters
-  type="purchase"                      // String: "purchase" | "sales"
-/>
+### Import components:
+```javascript
+import { 
+  InvoiceFilters, 
+  InvoiceList, 
+  PaginationControls 
+} from '../components/invoices';
 ```
 
-### InvoiceAccordion
-```jsx
-<InvoiceAccordion
-  groupedInvoices={groupedInvoices}    // Array: invoices grouped by date
-  expandedDates={expandedDates}        // Object: which dates are expanded
-  onToggleDate={toggleDate}            // Function: toggle date expansion
-  onViewDetail={handleViewDetail}     // Function: view invoice detail
-  onEdit={handleEdit}                  // Function: edit invoice (optional)
-  onDelete={handleDelete}              // Function: delete invoice (optional)
-  type="purchase"                      // String: "purchase" | "sales"
-/>
-```
+## Mở rộng trong tương lai:
 
-### PurchaseInvoiceForm
-```jsx
-<PurchaseInvoiceForm
-  formData={formData}                  // Object: form data
-  suppliers={suppliers}                // Array: supplier options
-  products={products}                  // Array: product options
-  categories={categories}              // Array: category options
-  onFormChange={handleFormChange}      // Function: update form data
-  onItemChange={handleItemChange}      // Function: update item data
-  onAddItem={handleAddItem}            // Function: add new item
-  onRemoveItem={handleRemoveItem}      // Function: remove item
-  onSubmit={handleSubmit}              // Function: submit form
-  isSubmitting={false}                 // Boolean: submission state
-/>
-```
+1. **Thêm loại hóa đơn mới**: Chỉ cần tạo hook và form component riêng
+2. **Thêm tính năng**: Dễ dàng thêm vào hook tương ứng
+3. **Thay đổi UI**: Chỉ cần sửa component cụ thể
+4. **Optimization**: Có thể áp dụng React.memo, useMemo dễ dàng
 
-## Best Practices
+## Testing Strategy:
 
-1. **Luôn sử dụng TypeScript** (nếu có thể) để type-safe props
-2. **Viết unit tests** cho từng component
-3. **Sử dụng React.memo** cho các component không thay đổi thường xuyên
-4. **Tách logic phức tạp** ra thành custom hooks
-5. **Sử dụng PropTypes** nếu không dùng TypeScript
+1. **Unit Tests**: Test từng component riêng biệt
+2. **Hook Tests**: Test logic trong custom hooks
+3. **Integration Tests**: Test tương tác giữa components
+4. **E2E Tests**: Test flow hoàn chỉnh
 
-## Troubleshooting
+## Migration Guide:
 
-### Lỗi thường gặp:
-
-1. **Component không render:** Kiểm tra props có được truyền đúng không
-2. **Hook lỗi:** Đảm bảo hook được gọi trong functional component
-3. **API lỗi:** Kiểm tra API endpoints và data format
-4. **State không update:** Kiểm tra dependency array trong useEffect
-
-### Debug tips:
-
-```jsx
-// Log props để debug
-console.log('Component props:', { filters, invoices, loading });
-
-// Sử dụng React DevTools để inspect component state
-// Thêm breakpoint trong browser DevTools
-```
-
-## Future Improvements
-
-1. **Thêm TypeScript** cho type safety
-2. **Implement React Query** cho data fetching và caching
-3. **Thêm unit tests** với Jest và React Testing Library
-4. **Optimize performance** với React.memo và useMemo
-5. **Thêm error boundaries** để handle errors gracefully
-6. **Implement virtualization** cho danh sách lớn
+1. Import các component mới
+2. Thay thế logic cũ bằng custom hooks
+3. Test kỹ các tính năng
+4. Deploy từng phần để đảm bảo stability

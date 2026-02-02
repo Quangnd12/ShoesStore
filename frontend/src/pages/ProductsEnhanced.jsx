@@ -647,6 +647,7 @@ const ProductsEnhanced = () => {
                       <img
                         src={group.image_url}
                         alt={group.name}
+                        onClick={() => handleViewDetail(group)}
                         className="w-10 h-10 rounded object-cover mr-3"
                       />
                     )}

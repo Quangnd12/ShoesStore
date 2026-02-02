@@ -14,6 +14,7 @@ import SearchableSelect from "../components/SearchableSelect";
 import LoadingSpinner from "../components/LoadingSpinner";
 import SkeletonLoader from "../components/SkeletonLoader";
 import ExportExcelModal from "../components/ExportExcelModal";
+import ImageZoomModal from "../components/ImageZoomModal";
 
 const SalesInvoices = () => {
   const { showToast } = useToast();
@@ -27,6 +28,8 @@ const SalesInvoices = () => {
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] =
     useState(null);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showImageZoom, setShowImageZoom] = useState(false);
+  const [selectedImage, setSelectedImage] = useState({ url: "", alt: "" });
   
   // Multi-tab structure
   const [tabs, setTabs] = useState([
@@ -171,6 +174,11 @@ const SalesInvoices = () => {
     } catch (error) {
       alert("Không thể tải chi tiết hóa đơn");
     }
+  };
+
+  const handleImageClick = (imageUrl, productName) => {
+    setSelectedImage({ url: imageUrl, alt: productName });
+    setShowImageZoom(true);
   };
 
   const handleExportExcel = async (options) => {
@@ -1705,7 +1713,9 @@ const SalesInvoices = () => {
                               <img
                                 src={item.image_url}
                                 alt={item.product_name}
-                                className="w-12 h-12 object-cover rounded border border-gray-200"
+                                className="w-12 h-12 object-cover rounded border border-gray-200 cursor-pointer hover:border-blue-400 transition-colors"
+                                onClick={() => handleImageClick(item.image_url, item.product_name)}
+                                title="Click để phóng to hình ảnh"
                               />
                             ) : (
                               <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
@@ -1793,6 +1803,14 @@ const SalesInvoices = () => {
         onClose={() => setShowExportModal(false)}
         onExport={handleExportExcel}
         totalRecords={invoices.length}
+      />
+
+      {/* Image Zoom Modal */}
+      <ImageZoomModal
+        isOpen={showImageZoom}
+        onClose={() => setShowImageZoom(false)}
+        imageUrl={selectedImage.url}
+        altText={selectedImage.alt}
       />
     </div>
   );

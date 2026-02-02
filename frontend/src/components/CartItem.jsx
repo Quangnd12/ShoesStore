@@ -2,9 +2,12 @@ import { Plus, Minus, X, Package, Edit2, Check } from "lucide-react";
 import { useState } from "react";
 import ColorDisplay from "./ColorDisplay";
 
-const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
+const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove, maxQuantity = 99 }) => {
   const [isEditingPrice, setIsEditingPrice] = useState(false);
   const [editedPrice, setEditedPrice] = useState(item.unit_price);
+  
+  // Kiểm tra đã đạt số lượng tối đa chưa
+  const isMaxQuantity = item.quantity >= maxQuantity;
 
   const handlePriceEdit = () => {
     setIsEditingPrice(true);
@@ -14,7 +17,7 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
   const handlePriceSave = () => {
     const newPrice = parseFloat(editedPrice);
     if (!isNaN(newPrice) && newPrice > 0) {
-      onUpdatePrice(item.id, newPrice);
+      onUpdatePrice(newPrice);
       setIsEditingPrice(false);
     }
   };
@@ -57,7 +60,7 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
               <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">
                 {item.name}
               </h4>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {item.color && (
                   <ColorDisplay 
                     color={item.color} 
@@ -66,9 +69,16 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
                     style="circle"
                   />
                 )}
-                {item.size && (
+                {/* Hiển thị size đã chọn */}
+                {item.selectedSize && (
+                  <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-semibold">
+                    Size: {item.selectedSize}
+                  </span>
+                )}
+                {/* Fallback: hiển thị size gốc nếu không có selectedSize */}
+                {!item.selectedSize && item.size && (
                   <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">
-                   Size: {item.size}
+                    {item.size}
                   </span>
                 )}
                 
@@ -113,7 +123,7 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
             
             {/* Remove Button */}
             <button
-              onClick={() => onRemove(item.id)}
+              onClick={onRemove}
               className="text-gray-400 hover:text-red-600 transition-colors"
               title="Xóa"
             >
@@ -125,8 +135,9 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-1.5">
               <button
-                onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-                className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition-colors"
+                onClick={() => onUpdateQuantity(item.quantity - 1)}
+                disabled={item.quantity <= 1}
+                className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Minus size={12} />
               </button>
@@ -134,11 +145,16 @@ const CartItem = ({ item, onUpdateQuantity, onUpdatePrice, onRemove }) => {
                 {item.quantity}
               </span>
               <button
-                onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition-colors"
+                onClick={() => onUpdateQuantity(item.quantity + 1)}
+                disabled={isMaxQuantity}
+                className="w-6 h-6 flex items-center justify-center rounded border border-gray-300 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title={isMaxQuantity ? `Tối đa ${maxQuantity}` : ''}
               >
                 <Plus size={12} />
               </button>
+              {isMaxQuantity && (
+                <span className="text-[10px] text-orange-600 ml-1">Max</span>
+              )}
             </div>
             
             <div className="text-right">

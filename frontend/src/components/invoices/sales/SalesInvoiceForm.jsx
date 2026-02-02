@@ -1,198 +1,189 @@
-import { Plus, Trash2 } from "lucide-react";
-import SearchableSelect from "../../SearchableSelect";
-import SalesInvoiceItem from "./SalesInvoiceItem";
+import React from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 
 const SalesInvoiceForm = ({
-  formData,
+  tab,
+  tabIndex,
   products,
-  onFormChange,
+  onSubmit,
+  onTabDataChange,
   onItemChange,
   onAddItem,
   onRemoveItem,
-  onSubmit,
-  isSubmitting = false
+  onCancel
 }) => {
-  const handleInputChange = (field, value) => {
-    onFormChange(field, value);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(e);
-  };
-
-  const calculateTotal = () => {
-    return formData.items.reduce((total, item) => {
-      const quantity = parseInt(item.quantity) || 0;
-      const unitPrice = parseFloat(item.unit_price) || 0;
-      return total + (quantity * unitPrice);
-    }, 0);
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("vi-VN", {
-      style: "currency",
-      currency: "VND",
-    }).format(amount);
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Thông tin hóa đơn */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <form onSubmit={(e) => onSubmit(e, tabIndex)} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Số hóa đơn *
           </label>
           <input
             type="text"
-            value={formData.invoice_number}
-            onChange={(e) => handleInputChange("invoice_number", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             required
+            value={tab.data.invoice_number}
+            onChange={(e) => onTabDataChange(tabIndex, "invoice_number", e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Ngày bán *
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ngày *
           </label>
           <input
             type="date"
-            value={formData.invoice_date}
-            onChange={(e) => handleInputChange("invoice_date", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             required
+            value={tab.data.invoice_date}
+            onChange={(e) => onTabDataChange(tabIndex, "invoice_date", e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      {/* Thông tin khách hàng */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Tên khách hàng
           </label>
           <input
             type="text"
-            value={formData.customer_name}
-            onChange={(e) => handleInputChange("customer_name", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            placeholder="Nhập tên khách hàng"
+            value={tab.data.customer_name}
+            onChange={(e) => onTabDataChange(tabIndex, "customer_name", e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Số điện thoại
           </label>
           <input
             type="tel"
-            value={formData.customer_phone}
-            onChange={(e) => handleInputChange("customer_phone", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            placeholder="Nhập số điện thoại"
+            value={tab.data.customer_phone}
+            onChange={(e) => onTabDataChange(tabIndex, "customer_phone", e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Email
           </label>
           <input
             type="email"
-            value={formData.customer_email}
-            onChange={(e) => handleInputChange("customer_email", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            placeholder="Nhập email"
+            value={tab.data.customer_email}
+            onChange={(e) => onTabDataChange(tabIndex, "customer_email", e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
-      {/* Ghi chú */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Ghi chú
         </label>
         <textarea
-          value={formData.notes}
-          onChange={(e) => handleInputChange("notes", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          rows="3"
-          placeholder="Ghi chú thêm..."
+          value={tab.data.notes}
+          onChange={(e) => onTabDataChange(tabIndex, "notes", e.target.value)}
+          rows="2"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
-      {/* Danh sách sản phẩm */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Danh sách sản phẩm</h3>
+        <div className="flex justify-between items-center mb-3">
+          <label className="block text-sm font-medium text-gray-700">
+            Sản phẩm *
+          </label>
           <button
             type="button"
-            onClick={onAddItem}
-            className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition"
+            onClick={() => onAddItem(tabIndex)}
+            className="flex items-center space-x-1 text-blue-600 hover:text-blue-800"
           >
             <Plus size={16} />
             <span>Thêm sản phẩm</span>
           </button>
         </div>
-
-        <div className="space-y-4">
-          {formData.items.map((item, index) => (
-            <div key={index} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium text-gray-800">Sản phẩm {index + 1}</h4>
-                {formData.items.length > 1 && (
+        
+        <div className="space-y-3">
+          {tab.data.items.map((item, itemIndex) => (
+            <div key={itemIndex} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex justify-between items-start mb-3">
+                <h4 className="font-medium text-gray-700">Sản phẩm {itemIndex + 1}</h4>
+                {tab.data.items.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => onRemoveItem(index)}
-                    className="text-red-600 hover:text-red-800 p-1 rounded"
-                    title="Xóa sản phẩm"
+                    onClick={() => onRemoveItem(tabIndex, itemIndex)}
+                    className="text-red-600 hover:text-red-800"
                   >
                     <Trash2 size={16} />
                   </button>
                 )}
               </div>
-
-              <SalesInvoiceItem
-                item={item}
-                itemIndex={index}
-                products={products}
-                onItemChange={onItemChange}
-              />
+              
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Sản phẩm *
+                  </label>
+                  <select
+                    required
+                    value={item.product_id}
+                    onChange={(e) => onItemChange(tabIndex, itemIndex, "product_id", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Chọn sản phẩm</option>
+                    {products.map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} - {new Intl.NumberFormat("vi-VN").format(product.price)}đ
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Số lượng *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) => onItemChange(tabIndex, itemIndex, "quantity", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Đơn giá
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={item.unit_price}
+                    onChange={(e) => onItemChange(tabIndex, itemIndex, "unit_price", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Tổng kết */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <div className="space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Tổng số lượng:</span>
-            <span className="font-medium">
-              {formData.items.reduce((total, item) => {
-                return total + (parseInt(item.quantity) || 0);
-              }, 0)}
-            </span>
-          </div>
-          <div className="flex justify-between items-center text-lg font-semibold border-t pt-2">
-            <span>Tổng cộng:</span>
-            <span className="text-green-600">
-              {formatCurrency(calculateTotal())}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Nút submit */}
-      <div className="flex justify-end">
+      <div className="flex justify-end space-x-3 pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          title="Đóng modal (ESC)"
+        >
+          Hủy (ESC)
+        </button>
         <button
           type="submit"
-          disabled={isSubmitting}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          {isSubmitting ? "Đang tạo..." : "Tạo hóa đơn"}
+          Tạo hóa đơn
         </button>
       </div>
     </form>

@@ -1,222 +1,99 @@
-import { useState, useEffect } from "react";
-import { Plus, RefreshCw, FileSpreadsheet } from "lucide-react";
-import {
-  purchaseInvoicesAPI,
-  suppliersAPI,
-  productsAPI,
-  categoriesAPI,
-} from "../services/api";
-import { useToast } from "../contexts/ToastContext";
-import DynamicTabs from "../components/DynamicTabs";
-import ConfirmDialog from "../components/ConfirmDialog";
-import LoadingSpinner from "../components/LoadingSpinner";
-import SkeletonLoader from "../components/SkeletonLoader";
-import ImportExcelModal from "../components/ImportExcelModal";
+import React, { useEffect } from 'react';
+import { Plus, RefreshCw, FileSpreadsheet, X } from 'lucide-react';
+import { purchaseInvoicesAPI } from '../services/api';
+import { useToast } from '../contexts/ToastContext';
+import { useInvoiceData } from '../hooks/useInvoiceData';
+import { usePurchaseInvoice } from '../hooks/usePurchaseInvoice';
+import InvoiceFilters from '../components/invoices/InvoiceFilters';
+import InvoiceList from '../components/invoices/InvoiceList';
+import InvoiceDetailModal from '../components/invoices/InvoiceDetailModal';
+import PaginationControls from '../components/invoices/PaginationControls';
+import DynamicTabs from '../components/DynamicTabs';
+import PurchaseInvoiceForm from '../components/invoices/purchase/PurchaseInvoiceForm';
+import ConfirmDialog from '../components/ConfirmDialog';
+import ImportExcelModal from '../components/ImportExcelModal';
+import SkeletonLoader from '../components/SkeletonLoader';
 
-// Import new components
-import InvoiceFilters from "../components/invoices/shared/InvoiceFilters";
-import InvoicePagination from "../components/invoices/shared/InvoicePagination";
-import InvoiceAccordion from "../components/invoices/shared/InvoiceAccordion";
-import InvoiceDetailModal from "../components/invoices/shared/InvoiceDetailModal";
-import PurchaseInvoiceForm from "../components/invoices/purchase/PurchaseInvoiceForm";
-
-// Import hooks
-import { useInvoices } from "../hooks/useInvoices";
-import { useInvoiceModal } from "../hooks/useInvoiceModal";
-
-const PurchaseInvoicesRefactored = () => {
+const PurchaseInvoices = () => {
   const { showToast } = useToast();
   
-  // Data states
-  const [suppliers, setSuppliers] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  
-  // Modal states
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [expandedDates, setExpandedDates] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Custom hooks
+  // Invoice data management
   const {
-    invoices,
+    filteredInvoices,
+    groupedInvoices,
     loading,
     currentPage,
-    setCurrentPage,
-    itemsPerPage,
-    setItemsPerPage,
     totalPages,
+    itemsPerPage,
     filters,
     setFilters,
-    groupedInvoices,
-    refreshInvoices,
-    deleteInvoice,
     clearFilters,
-  } = useInvoices(purchaseInvoicesAPI, "purchase");
+    expandedDates,
+    toggleDate,
+    fetchInvoices,
+    handleDelete,
+    handlePageChange,
+    handleItemsPerPageChange,
+    clearCache,
+  } = useInvoiceData(purchaseInvoicesAPI);
 
+  // Purchase invoice specific logic
   const {
-    showModal,
+    suppliers,
+    products,
+    categories,
     tabs,
+    selectedInvoice,
     activeTabIndex,
-    showConfirmDialog,
     isDirty,
+    showModal,
+    showDetailModal,
+    showImportModal,
+    showConfirmDialog,
+    setShowModal,
+    setShowDetailModal,
+    setShowImportModal,
+    handleViewDetail,
     handleAddTab,
     handleTabClose,
     handleTabChange,
     handleTabDataChange,
     handleItemChange,
-    handleAddItem,
-    handleRemoveItem,
+    handleImageFileChange,
+    handleAddVariant,
+    handleRemoveVariant,
+    handleVariantChange,
+    handleSubmit,
+    handleSubmitAll,
+    handleImportExcel,
     handleCloseModal,
     handleConfirmClose,
     handleCancelClose,
-    openModal,
-  } = useInvoiceModal(purchaseInvoicesAPI, "purchase");
+    resetAllTabs,
+    setTabs,
+  } = usePurchaseInvoice();
 
-  // Fetch data
+  // Refresh data after operations
   useEffect(() => {
-    fetchSuppliers();
-    fetchProducts();
-    fetchCategories();
-  }, []);
+    const handleProductsUpdated = () => {
+      clearCache();
+      fetchInvoices(true);
+    };
 
-  const fetchSuppliers = async () => {
-    try {
-      const response = await suppliersAPI.getAll();
-      setSuppliers(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error("Error fetching suppliers:", error);
-      showToast("Không thể tải danh sách nhà cung cấp", "error");
-    }
-  };
+    window.addEventListener('products-updated', handleProductsUpdated);
+    return () => window.removeEventListener('products-updated', handleProductsUpdated);
+  }, [clearCache, fetchInvoices]);
 
-  const fetchProducts = async () => {
-    try {
-      const response = await productsAPI.getAll({ limit: 1000 });
-      const productsData = response.data?.products || response.data || [];
-      setProducts(Array.isArray(productsData) ? productsData : []);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      showToast("Không thể tải danh sách sản phẩm", "error");
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const response = await categoriesAPI.getAll();
-      setCategories(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      showToast("Không thể tải danh sách danh mục", "error");
-    }
-  };
-
-  const handleViewDetail = async (id) => {
-    try {
-      const response = await purchaseInvoicesAPI.getById(id);
-      setSelectedInvoice(response.data);
-      setShowDetailModal(true);
-    } catch (error) {
-      showToast("Không thể tải chi tiết hóa đơn", "error");
-    }
-  };
-
-  const handleSubmit = async (e, tabIndex) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    try {
-      const tabData = tabs[tabIndex].data;
-      const items = [];
-
-      // Convert variants to items for API
-      tabData.items.forEach((item) => {
-        if (item.product_id) {
-          item.variants.forEach((variant) => {
-            items.push({
-              product_id: parseInt(item.product_id),
-              quantity: parseInt(variant.quantity),
-              unit_cost: parseFloat(variant.unit_cost),
-              size: variant.size || null,
-            });
-          });
-        } else {
-          item.variants.forEach((variant) => {
-            items.push({
-              name: item.name,
-              price: parseFloat(item.price),
-              category_id: parseInt(item.category_id),
-              quantity: parseInt(variant.quantity),
-              unit_cost: parseFloat(variant.unit_cost),
-              size: variant.size || null,
-              image_url: item.image_url || null,
-              brand: item.brand || null,
-              color: item.color || null,
-            });
-          });
-        }
-      });
-
-      await purchaseInvoicesAPI.create({
-        invoice_number: tabData.invoice_number,
-        supplier_id: parseInt(tabData.supplier_id),
-        invoice_date: tabData.invoice_date,
-        notes: tabData.notes,
-        items,
-      });
-
-      // Remove submitted tab
-      const newTabs = tabs.filter((_, i) => i !== tabIndex);
-      if (newTabs.length === 0) {
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && showModal && !showConfirmDialog) {
         handleCloseModal();
-      } else {
-        // Handle tab removal logic here
-        handleTabClose(tabIndex);
       }
-      
-      await refreshInvoices();
-      window.dispatchEvent(new Event("products-updated"));
-      showToast("Tạo hóa đơn nhập thành công!", "success");
-    } catch (error) {
-      showToast(error.response?.data?.message || "Có lỗi xảy ra", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleImportExcel = async (invoicesData) => {
-    try {
-      const response = await purchaseInvoicesAPI.import(invoicesData);
-      
-      await refreshInvoices();
-
-      const { success_count, error_count, errors } = response.data;
-
-      if (error_count === 0) {
-        showToast(`Import thành công ${success_count} hóa đơn!`, "success");
-      } else if (success_count === 0) {
-        const errorMessages = errors.map(err => `${err.invoice_number}: ${err.error}`).join("; ");
-        showToast(`Import thất bại: ${errorMessages}`, "error");
-      } else {
-        const errorMessages = errors.map(err => `${err.invoice_number}: ${err.error}`).join("; ");
-        showToast(
-          `Import thành công ${success_count} hóa đơn, thất bại ${error_count} hóa đơn. ${errorMessages}`,
-          "warning"
-        );
-      }
-    } catch (error) {
-      showToast("Có lỗi xảy ra khi import: " + (error.response?.data?.message || error.message), "error");
-    }
-  };
-
-  const toggleDate = (dateKey) => {
-    setExpandedDates((prev) => ({
-      ...prev,
-      [dateKey]: !prev[dateKey],
-    }));
-  };
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showModal, showConfirmDialog, handleCloseModal]);
 
   if (loading) {
     return (
@@ -225,6 +102,16 @@ const PurchaseInvoicesRefactored = () => {
           <div className="h-9 bg-gray-200 rounded w-64 animate-pulse"></div>
           <div className="h-10 bg-gray-200 rounded w-48 animate-pulse"></div>
         </div>
+
+        <div className="bg-white rounded-lg shadow p-4 mb-4 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+
         <SkeletonLoader type="list" />
       </div>
     );
@@ -237,7 +124,11 @@ const PurchaseInvoicesRefactored = () => {
         <h1 className="text-3xl font-bold text-gray-800">Hóa đơn nhập hàng</h1>
         <div className="flex items-center space-x-3">
           <button
-            onClick={refreshInvoices}
+            onClick={async () => {
+              clearCache();
+              await fetchInvoices(true);
+              showToast("Đã làm mới danh sách hóa đơn", "success");
+            }}
             className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition"
             title="Làm mới danh sách"
           >
@@ -252,7 +143,10 @@ const PurchaseInvoicesRefactored = () => {
             <span>Import Excel</span>
           </button>
           <button
-            onClick={openModal}
+            onClick={async () => {
+              await resetAllTabs();
+              setShowModal(true);
+            }}
             className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
           >
             <Plus size={20} />
@@ -270,63 +164,71 @@ const PurchaseInvoicesRefactored = () => {
       />
 
       {/* Invoice List */}
-      <InvoiceAccordion
+      <InvoiceList
         groupedInvoices={groupedInvoices}
         expandedDates={expandedDates}
         onToggleDate={toggleDate}
         onViewDetail={handleViewDetail}
-        onDelete={deleteInvoice}
+        onDelete={handleDelete}
         type="purchase"
       />
 
       {/* Pagination */}
-      <InvoicePagination
+      <PaginationControls
         currentPage={currentPage}
         totalPages={totalPages}
         itemsPerPage={itemsPerPage}
-        onPageChange={setCurrentPage}
-        onItemsPerPageChange={setItemsPerPage}
+        totalItems={filteredInvoices.length}
+        onPageChange={handlePageChange}
+        onItemsPerPageChange={handleItemsPerPageChange}
       />
 
       {/* Create Invoice Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">
-                Tạo hóa đơn nhập hàng
-              </h2>
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCloseModal();
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Thêm hóa đơn nhập hàng</h2>
               <button
                 onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-500 hover:text-gray-700"
               >
-                ×
+                <X size={24} />
               </button>
             </div>
-
-            <div className="p-6">
-              <DynamicTabs
-                tabs={tabs}
-                activeTabIndex={activeTabIndex}
-                onTabChange={handleTabChange}
-                onTabClose={handleTabClose}
-                onAddTab={handleAddTab}
-                renderTabContent={(tab, tabIndex) => (
-                  <PurchaseInvoiceForm
-                    formData={tab.data}
-                    suppliers={suppliers}
-                    products={products}
-                    categories={categories}
-                    onFormChange={(field, value) => handleTabDataChange(tabIndex, field, value)}
-                    onItemChange={(itemIndex, field, value) => handleItemChange(tabIndex, itemIndex, field, value)}
-                    onAddItem={() => handleAddItem(tabIndex)}
-                    onRemoveItem={(itemIndex) => handleRemoveItem(tabIndex, itemIndex)}
-                    onSubmit={(e) => handleSubmit(e, tabIndex)}
-                    isSubmitting={isSubmitting}
-                  />
-                )}
-              />
-            </div>
+            <DynamicTabs
+              tabs={tabs}
+              onTabChange={handleTabChange}
+              onTabClose={handleTabClose}
+              onAddTab={handleAddTab}
+              renderTabContent={(tab, tabIndex) => (
+                <PurchaseInvoiceForm
+                  tab={tab}
+                  tabIndex={tabIndex}
+                  suppliers={suppliers}
+                  products={products}
+                  categories={categories}
+                  tabs={tabs}
+                  setTabs={setTabs}
+                  onSubmit={handleSubmit}
+                  onTabDataChange={handleTabDataChange}
+                  onItemChange={handleItemChange}
+                  onImageFileChange={handleImageFileChange}
+                  onAddVariant={handleAddVariant}
+                  onRemoveVariant={handleRemoveVariant}
+                  onVariantChange={handleVariantChange}
+                  onSubmitAll={handleSubmitAll}
+                  onCancel={handleCloseModal}
+                />
+              )}
+            />
           </div>
         </div>
       )}
@@ -334,34 +236,47 @@ const PurchaseInvoicesRefactored = () => {
       {/* Detail Modal */}
       <InvoiceDetailModal
         isOpen={showDetailModal}
-        onClose={() => {
-          setShowDetailModal(false);
-          setSelectedInvoice(null);
-        }}
+        onClose={() => setShowDetailModal(false)}
         invoice={selectedInvoice}
         type="purchase"
+        onInvoiceUpdated={async () => {
+          clearCache();
+          await fetchInvoices(true);
+          // Refresh selected invoice data
+          if (selectedInvoice?.id) {
+            try {
+              const response = await purchaseInvoicesAPI.getById(selectedInvoice.id);
+              setShowDetailModal(false);
+            } catch (error) {
+              console.error('Error refreshing invoice:', error);
+            }
+          }
+        }}
       />
-
-      {/* Import Modal */}
-      {showImportModal && (
-        <ImportExcelModal
-          isOpen={showImportModal}
-          onClose={() => setShowImportModal(false)}
-          onImport={handleImportExcel}
-          type="purchase"
-        />
-      )}
 
       {/* Confirm Dialog */}
       <ConfirmDialog
-        isOpen={showConfirmDialog}
-        title="Xác nhận đóng"
-        message="Bạn có thay đổi chưa được lưu. Bạn có chắc chắn muốn đóng không?"
+        show={showConfirmDialog}
+        title="Xác nhận thoát"
+        message="Bạn có thay đổi chưa lưu. Bạn có chắc muốn thoát?"
+        confirmText="Thoát"
+        cancelText="Tiếp tục chỉnh sửa"
+        confirmColor="red"
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
+      />
+
+      {/* Import Excel Modal */}
+      <ImportExcelModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={handleImportExcel}
+        suppliers={suppliers}
+        categories={categories}
+        products={products}
       />
     </div>
   );
 };
 
-export default PurchaseInvoicesRefactored;
+export default PurchaseInvoices;

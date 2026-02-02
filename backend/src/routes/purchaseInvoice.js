@@ -8,7 +8,10 @@ router.post("/", auth, isAdmin, purchaseInvoiceController.createPurchaseInvoice)
 router.post("/import", auth, isAdmin, purchaseInvoiceController.importPurchaseInvoices);
 router.get("/", auth, isAdmin, purchaseInvoiceController.getAllPurchaseInvoices);
 router.get("/next-number", auth, isAdmin, purchaseInvoiceController.getNextInvoiceNumber);
+router.get("/history/product/:productId", auth, purchaseInvoiceController.getPurchaseHistoryByProductId);
+router.get("/history/search", auth, purchaseInvoiceController.getPurchaseHistoryByProductName);
 router.get("/:id", auth, purchaseInvoiceController.getPurchaseInvoiceById);
+router.put("/:id", auth, isAdmin, purchaseInvoiceController.updatePurchaseInvoice);
 router.delete("/:id", auth, isAdmin, purchaseInvoiceController.deletePurchaseInvoice);
 
 module.exports = router;

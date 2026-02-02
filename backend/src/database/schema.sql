@@ -1,8 +1,8 @@
 -- Schema cho tính năng quản lý nhập hàng và bán hàng với size EU
--- Lưu ý: Mỗi record trong bảng products đại diện cho một sản phẩm với một size cụ thể
+-- Lưu ý: Mỗi record trong bảng products đại diện cho một sản phẩm với nhiều sizes
 
--- Đảm bảo bảng products có cột size (size_eu) - nếu chưa có thì thêm
--- ALTER TABLE products ADD COLUMN IF NOT EXISTS size DECIMAL(3,1) COMMENT 'Size theo chuẩn EU (ví dụ: 36.0, 37.5, 42.0)';
+-- Cập nhật cột size trong bảng products thành VARCHAR để lưu nhiều sizes
+-- ALTER TABLE products MODIFY COLUMN size VARCHAR(255) COMMENT 'Danh sách sizes (ví dụ: 36, 37, 38, 39, 40 hoặc S, M, L, XL)';
 
 -- Bảng suppliers: Nhà cung cấp
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   purchase_invoice_id INT NOT NULL,
   product_id INT NOT NULL,
-  size_eu DECIMAL(3,1) NOT NULL,
+  size_eu VARCHAR(20) COMMENT 'Size đơn lẻ (ví dụ: 38, 39, S, M, L)',
   quantity INT NOT NULL COMMENT 'Số lượng nhập',
   unit_cost DECIMAL(15,2) NOT NULL COMMENT 'Giá nhập mỗi đơn vị',
   total_cost DECIMAL(15,2) NOT NULL COMMENT 'Tổng chi phí = quantity * unit_cost',
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS sales_invoice_items (
   id INT AUTO_INCREMENT PRIMARY KEY,
   sales_invoice_id INT NOT NULL,
   product_id INT NOT NULL,
-  size_eu DECIMAL(3,1) NOT NULL,
+  size_eu VARCHAR(20) COMMENT 'Size đơn lẻ (ví dụ: 38, 39, S, M, L)',
   quantity INT NOT NULL COMMENT 'Số lượng bán',
   unit_price DECIMAL(15,2) NOT NULL COMMENT 'Giá bán mỗi đơn vị',
   total_price DECIMAL(15,2) NOT NULL COMMENT 'Tổng giá = quantity * unit_price',
@@ -117,3 +117,17 @@ CREATE TABLE IF NOT EXISTS return_exchange_items (
   INDEX idx_product_id (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+-- Bảng product_sizes: Quản lý số lượng theo từng size của sản phẩm
+CREATE TABLE IF NOT EXISTS product_sizes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT NOT NULL,
+  size_value VARCHAR(20) NOT NULL COMMENT 'Giá trị size (ví dụ: 36, 37, 38, S, M, L, XL)',
+  quantity INT NOT NULL DEFAULT 0 COMMENT 'Số lượng tồn kho của size này',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_product_size (product_id, size_value),
+  INDEX idx_product_id (product_id),
+  INDEX idx_size_value (size_value)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
