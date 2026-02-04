@@ -1,22 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Package, ChevronDown, ChevronRight, Search, Check } from 'lucide-react';
+import { X, Package, ChevronDown, ChevronRight, Search, Check, History } from 'lucide-react';
 
 // Component chọn sản phẩm đổi với hình ảnh và group
-const ProductExchangeSelector = ({ 
-  products, 
+const ProductExchangeSelector = ({
+  products,
   selectedProductId,
   selectedSize,
   onSelect,
   onSizeSelect,
-  onPriceChange 
+  onPriceChange
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState({});
 
   // Lọc sản phẩm còn hàng và theo search term
   const filteredProducts = useMemo(() => {
-    return products.filter(p => 
-      p.stock_quantity > 0 && 
+    return products.filter(p =>
+      p.stock_quantity > 0 &&
       p.name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [products, searchTerm]);
@@ -24,11 +24,11 @@ const ProductExchangeSelector = ({
   // Group sản phẩm theo tên gốc (bỏ phần size/color)
   const groupedProducts = useMemo(() => {
     const groups = {};
-    
+
     filteredProducts.forEach(product => {
       // Lấy tên gốc (bỏ phần trong ngoặc hoặc sau dấu -)
       const baseName = product.name?.split(' - ')[0]?.trim() || product.name;
-      
+
       if (!groups[baseName]) {
         groups[baseName] = {
           name: baseName,
@@ -57,19 +57,19 @@ const ProductExchangeSelector = ({
     if (product.availableSizes && product.availableSizes.length > 0) {
       return product.availableSizes.filter(s => s.quantity > 0);
     }
-    
+
     // Fallback: parse từ chuỗi size
     if (product.size && product.size.includes(',')) {
       const sizes = product.size.split(',').map(s => s.trim()).filter(s => s);
       const qtyPerSize = Math.floor(product.stock_quantity / sizes.length) || 1;
       return sizes.map(s => ({ size: s, quantity: qtyPerSize }));
     }
-    
+
     // Single size hoặc không có size
     if (product.size) {
       return [{ size: product.size.trim(), quantity: product.stock_quantity }];
     }
-    
+
     return [];
   };
 
@@ -77,7 +77,7 @@ const ProductExchangeSelector = ({
     const sizes = getProductSizes(product);
     onSelect(product.id.toString());
     onPriceChange(product.price.toString());
-    
+
     // Nếu sản phẩm có nhiều size, reset size selection
     // Nếu chỉ có 1 size hoặc không có size, tự động chọn
     if (sizes.length === 1) {
@@ -140,20 +140,19 @@ const ProductExchangeSelector = ({
                 {selectedProductSizes.map((sizeInfo) => {
                   const isSelected = selectedSize === sizeInfo.size;
                   const isOutOfStock = sizeInfo.quantity <= 0;
-                  
+
                   return (
                     <button
                       key={sizeInfo.size}
                       type="button"
                       disabled={isOutOfStock}
                       onClick={() => onSizeSelect(sizeInfo.size)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        isOutOfStock
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : isSelected
-                            ? 'bg-green-600 text-white ring-2 ring-green-300'
-                            : 'bg-white border border-gray-300 text-gray-700 hover:border-green-400'
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${isOutOfStock
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : isSelected
+                          ? 'bg-green-600 text-white ring-2 ring-green-300'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:border-green-400'
+                        }`}
                     >
                       <span>{sizeInfo.size}</span>
                       <span className={`ml-1 text-xs ${isSelected ? 'text-green-100' : 'text-gray-500'}`}>
@@ -231,19 +230,17 @@ const ProductExchangeSelector = ({
                     const isSelected = parseInt(selectedProductId) === product.id;
                     const sizes = getProductSizes(product);
                     const hasMultiSize = sizes.length > 1;
-                    
+
                     return (
                       <button
                         key={product.id}
                         type="button"
                         onClick={() => handleSelectProduct(product)}
-                        className={`w-full flex items-center gap-3 p-3 transition-colors ${
-                          group.products.length > 1 ? 'pl-6' : ''
-                        } ${
-                          isSelected 
-                            ? 'bg-green-50 border-l-4 border-green-500' 
+                        className={`w-full flex items-center gap-3 p-3 transition-colors ${group.products.length > 1 ? 'pl-6' : ''
+                          } ${isSelected
+                            ? 'bg-green-50 border-l-4 border-green-500'
                             : 'hover:bg-gray-50'
-                        }`}
+                          }`}
                       >
                         <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-200">
                           {product.image_url ? (
@@ -279,11 +276,10 @@ const ProductExchangeSelector = ({
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                            product.stock_quantity < 5 
-                              ? 'bg-orange-100 text-orange-700' 
-                              : 'bg-green-100 text-green-700'
-                          }`}>
+                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${product.stock_quantity < 5
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'bg-green-100 text-green-700'
+                            }`}>
                             Còn {product.stock_quantity}
                           </span>
                         </div>
@@ -332,20 +328,20 @@ const ReturnExchangeModal = ({
     }
     return [];
   };
-  
+
   const selectedProductSizes = selectedProduct ? getProductSizes(selectedProduct) : [];
   const needsSizeSelection = selectedProductSizes.length > 1;
-  const isExchangeValid = returnForm.type !== "exchange" || 
+  const isExchangeValid = returnForm.type !== "exchange" ||
     (returnForm.item.new_product_id && (!needsSizeSelection || returnForm.item.new_size));
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (returnForm.type === "exchange" && needsSizeSelection && !returnForm.item.new_size) {
       alert("Vui lòng chọn size cho sản phẩm đổi!");
       return;
     }
-    
+
     onSubmit(e);
   };
 
@@ -391,7 +387,7 @@ const ReturnExchangeModal = ({
                 </span>
               </div>
             </div>
-            
+
             {/* Products in invoice */}
             {invoice.items && invoice.items.length > 0 && (
               <div className="mt-4 pt-3 border-t border-gray-200">
@@ -420,11 +416,10 @@ const ReturnExchangeModal = ({
                 Loại yêu cầu *
               </label>
               <div className="flex gap-4">
-                <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                  returnForm.type === "return" 
-                    ? "border-blue-500 bg-blue-50 text-blue-700" 
-                    : "border-gray-200 hover:border-gray-300"
-                }`}>
+                <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${returnForm.type === "return"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-200 hover:border-gray-300"
+                  }`}>
                   <input
                     type="radio"
                     name="type"
@@ -435,11 +430,10 @@ const ReturnExchangeModal = ({
                   />
                   <span className="font-medium">🔄 Hoàn trả</span>
                 </label>
-                <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                  returnForm.type === "exchange" 
-                    ? "border-green-500 bg-green-50 text-green-700" 
-                    : "border-gray-200 hover:border-gray-300"
-                }`}>
+                <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-all ${returnForm.type === "exchange"
+                  ? "border-green-500 bg-green-50 text-green-700"
+                  : "border-gray-200 hover:border-gray-300"
+                  }`}>
                   <input
                     type="radio"
                     name="type"
@@ -476,7 +470,7 @@ const ReturnExchangeModal = ({
                 <option value="">Chọn sản phẩm</option>
                 {invoice.items?.filter(item => item.quantity > 0).map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.product_name || item.name} 
+                    {item.product_name || item.name}
                     {item.size_eu && ` (Size ${item.size_eu})`}
                     {item.color && ` - ${item.color}`}
                     {` • SL: ${item.quantity || 0} • `}
@@ -489,7 +483,7 @@ const ReturnExchangeModal = ({
             {/* Quantity */}
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1">
-                Số lượng * 
+                Số lượng *
                 {returnForm.item.max_quantity && (
                   <span className="text-gray-500 font-normal ml-1">
                     (Tối đa: {returnForm.item.max_quantity})
@@ -535,7 +529,7 @@ const ReturnExchangeModal = ({
                     onPriceChange={(price) => onReturnItemChange("new_unit_price", price)}
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-800 mb-1">
                     Giá sản phẩm mới *
@@ -576,7 +570,7 @@ const ReturnExchangeModal = ({
             </div>
 
             {/* Notes */}
-            <div>
+            <div className="pb-4">
               <label className="block text-sm font-semibold text-gray-800 mb-1">
                 Ghi chú
               </label>
@@ -588,6 +582,33 @@ const ReturnExchangeModal = ({
                 placeholder="Ghi chú thêm về yêu cầu hoàn trả/đổi hàng..."
               />
             </div>
+
+            {/* Previous History Section */}
+            {(invoice.return_exchanges || invoice.returnExchanges)?.length > 0 && (
+              <div className="pt-6 border-t border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <History className="text-gray-400" size={18} />
+                  <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Lịch sử đã xử lý</h4>
+                </div>
+                <div className="space-y-3">
+                  {(invoice.return_exchanges || invoice.returnExchanges).map((re, idx) => (
+                    <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${re.type === 'return' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {re.type === 'return' ? 'Hoàn trả' : 'Đổi hàng'}
+                        </span>
+                        <span className="text-gray-400 font-medium">{new Date(re.created_at).toLocaleDateString("vi-VN")}</span>
+                      </div>
+                      <p className="font-bold text-gray-800 mb-1">{re.old_product_name}</p>
+                      <div className="flex gap-3 text-gray-500">
+                        <span>SL: {re.return_quantity}</span>
+                        <span>Size: {re.old_product_size || 'N/A'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </form>
         </div>
 
@@ -604,13 +625,12 @@ const ReturnExchangeModal = ({
             type="submit"
             onClick={handleSubmit}
             disabled={!isExchangeValid}
-            className={`px-5 py-2.5 rounded-lg font-medium transition-colors ${
-              !isExchangeValid
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : returnForm.type === "return"
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-green-600 text-white hover:bg-green-700"
-            }`}
+            className={`px-5 py-2.5 rounded-lg font-medium transition-colors ${!isExchangeValid
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : returnForm.type === "return"
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-green-600 text-white hover:bg-green-700"
+              }`}
           >
             {returnForm.type === "return" ? "🔄 Tạo hoàn trả" : "🔃 Tạo đổi hàng"}
           </button>

@@ -12,6 +12,8 @@ export const useSalesInvoice = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [selectedInvoiceForReturn, setSelectedInvoiceForReturn] = useState(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [invoiceForReceipt, setInvoiceForReceipt] = useState(null);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
@@ -84,6 +86,16 @@ export const useSalesInvoice = () => {
       setShowDetailModal(true);
     } catch (error) {
       showToast("Không thể tải chi tiết hóa đơn", "error");
+    }
+  };
+
+  const handleViewReceipt = async (id) => {
+    try {
+      const response = await salesInvoicesAPI.getById(id);
+      setInvoiceForReceipt(response.data);
+      setShowReceiptModal(true);
+    } catch (error) {
+      showToast("Không thể tải dữ liệu hóa đơn", "error");
     }
   };
 
@@ -328,6 +340,26 @@ export const useSalesInvoice = () => {
     }
   };
 
+  const handleUpdateInvoice = async (id, data) => {
+    try {
+      await salesInvoicesAPI.update(id, data);
+      showToast("Cập nhật hóa đơn thành công!", "success");
+      
+      // Refresh details if needed
+      if (selectedInvoice && selectedInvoice.id === id) {
+        const response = await salesInvoicesAPI.getById(id);
+        setSelectedInvoice(response.data);
+      }
+      
+      // Trigger refresh of invoice list
+      window.dispatchEvent(new Event("invoices-updated"));
+      return true;
+    } catch (error) {
+      showToast(error.response?.data?.message || "Không thể cập nhật hóa đơn", "error");
+      return false;
+    }
+  };
+
   const resetAllTabs = async () => {
     try {
       const response = await salesInvoicesAPI.getNextInvoiceNumber();
@@ -403,6 +435,7 @@ export const useSalesInvoice = () => {
     tabs,
     selectedInvoice,
     selectedInvoiceForReturn,
+    invoiceForReceipt,
     returnForm,
     activeTabIndex,
     isDirty,
@@ -412,6 +445,7 @@ export const useSalesInvoice = () => {
     showDetailModal,
     showReturnModal,
     showExportModal,
+    showReceiptModal,
     showConfirmDialog,
     
     // Actions
@@ -419,7 +453,10 @@ export const useSalesInvoice = () => {
     setShowDetailModal,
     setShowReturnModal,
     setShowExportModal,
+    setShowReceiptModal,
     handleViewDetail,
+    handleViewReceipt,
+    handleUpdateInvoice,
     handleAddTab,
     handleTabClose,
     handleTabChange,

@@ -12,12 +12,13 @@ import PaginationControls from '../components/invoices/PaginationControls';
 import DynamicTabs from '../components/DynamicTabs';
 import SalesInvoiceForm from '../components/invoices/sales/SalesInvoiceForm';
 import ReturnExchangeModal from '../components/invoices/sales/ReturnExchangeModal';
+import SalesInvoiceModal from '../components/invoices/sales/SalesInvoiceModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ExportExcelModal from '../components/ExportExcelModal';
 
 const SalesInvoices = () => {
   const { showToast } = useToast();
-  
+
   // Invoice data management
   const {
     filteredInvoices,
@@ -51,12 +52,16 @@ const SalesInvoices = () => {
     showDetailModal,
     showReturnModal,
     showExportModal,
+    showReceiptModal,
     showConfirmDialog,
     setShowModal,
     setShowDetailModal,
     setShowReturnModal,
     setShowExportModal,
+    setShowReceiptModal,
     handleViewDetail,
+    handleViewReceipt,
+    handleUpdateInvoice,
     handleAddTab,
     handleTabClose,
     handleTabChange,
@@ -72,6 +77,7 @@ const SalesInvoices = () => {
     handleCloseModal,
     handleConfirmClose,
     handleCancelClose,
+    invoiceForReceipt,
     resetAllTabs,
   } = useSalesInvoice();
 
@@ -79,10 +85,10 @@ const SalesInvoices = () => {
   const handleExportExcel = async (options) => {
     try {
       showToast("Đang xuất file Excel...", "info");
-      
+
       // Tạo params cho API dựa trên options
       let apiParams = { limit: 10000 };
-      
+
       // Xử lý date range - sửa logic filter
       if (options.dateRange !== "all") {
         if (options.dateFrom) {
@@ -92,11 +98,11 @@ const SalesInvoices = () => {
           apiParams.dateTo = options.dateTo;
         }
       }
-      
+
       // Lấy tất cả hóa đơn theo filter
       const response = await salesInvoicesAPI.getAll(apiParams);
       const allInvoices = response.data?.invoices || response.data || [];
-      
+
       // Filter client-side để đảm bảo chính xác
       let filteredInvoices = allInvoices;
       if (options.dateRange !== "all" && (options.dateFrom || options.dateTo)) {
@@ -105,14 +111,14 @@ const SalesInvoices = () => {
           const invoiceDate = new Date(invoice.invoice_date);
           const fromDate = options.dateFrom ? new Date(options.dateFrom + "T00:00:00") : null;
           const toDate = options.dateTo ? new Date(options.dateTo + "T23:59:59") : null;
-          
+
           if (fromDate && invoiceDate < fromDate) return false;
           if (toDate && invoiceDate > toDate) return false;
           return true;
         });
         console.log(`Filtered from ${allInvoices.length} to ${filteredInvoices.length} invoices`);
       }
-      
+
       if (filteredInvoices.length === 0) {
         showToast("Không có dữ liệu trong khoảng thời gian đã chọn", "warning");
         return;
@@ -123,17 +129,17 @@ const SalesInvoices = () => {
       // Lấy chi tiết từng hóa đơn
       const detailedInvoices = [];
       let processedCount = 0;
-      
+
       for (const invoice of filteredInvoices) {
         try {
           processedCount++;
           if (processedCount % 10 === 0) {
             showToast(`Đang xử lý ${processedCount}/${filteredInvoices.length} hóa đơn...`, "info");
           }
-          
+
           const detailResponse = await salesInvoicesAPI.getById(invoice.id);
           const invoiceDetail = detailResponse.data;
-          
+
           if (options.format === "summary") {
             // Format tổng hợp - mỗi dòng là một hóa đơn
             const summaryRow = {
@@ -154,9 +160,9 @@ const SalesInvoices = () => {
             if (options.includePaymentInfo) {
               summaryRow["Tổng tiền"] = invoiceDetail.final_amount || invoiceDetail.total_revenue || 0;
               summaryRow["Giảm giá"] = invoiceDetail.discount_amount || 0;
-              summaryRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" : 
-                                          invoiceDetail.payment_method === "card" ? "Thẻ" : 
-                                          invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
+              summaryRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" :
+                invoiceDetail.payment_method === "card" ? "Thẻ" :
+                  invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
             }
 
             summaryRow["Ghi chú"] = invoiceDetail.notes || "";
@@ -195,9 +201,9 @@ const SalesInvoices = () => {
                 if (options.includePaymentInfo) {
                   detailRow["Tổng hóa đơn"] = invoiceDetail.final_amount || invoiceDetail.total_revenue || 0;
                   detailRow["Giảm giá"] = invoiceDetail.discount_amount || 0;
-                  detailRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" : 
-                                              invoiceDetail.payment_method === "card" ? "Thẻ" : 
-                                              invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
+                  detailRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" :
+                    invoiceDetail.payment_method === "card" ? "Thẻ" :
+                      invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
                 }
 
                 detailRow["Ghi chú"] = invoiceDetail.notes || "";
@@ -235,9 +241,9 @@ const SalesInvoices = () => {
               if (options.includePaymentInfo) {
                 emptyRow["Tổng hóa đơn"] = invoiceDetail.final_amount || invoiceDetail.total_revenue || 0;
                 emptyRow["Giảm giá"] = invoiceDetail.discount_amount || 0;
-                emptyRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" : 
-                                            invoiceDetail.payment_method === "card" ? "Thẻ" : 
-                                            invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
+                emptyRow["Phương thức TT"] = invoiceDetail.payment_method === "cash" ? "Tiền mặt" :
+                  invoiceDetail.payment_method === "card" ? "Thẻ" :
+                    invoiceDetail.payment_method === "transfer" ? "Chuyển khoản" : "";
               }
 
               emptyRow["Ghi chú"] = invoiceDetail.notes || "";
@@ -289,9 +295,9 @@ const SalesInvoices = () => {
 
       // Xuất file
       XLSX.writeFile(wb, fileName);
-      
+
       showToast(`Xuất thành công ${detailedInvoices.length} dòng dữ liệu!`, "success");
-      
+
       // Đóng modal sau khi export thành công
       setShowExportModal(false);
     } catch (error) {
@@ -374,6 +380,7 @@ const SalesInvoices = () => {
         onViewDetail={handleViewDetail}
         onDelete={handleDelete}
         onEdit={handleOpenReturnModal}
+        onViewReceipt={handleViewReceipt}
         type="sales"
       />
 
@@ -436,6 +443,9 @@ const SalesInvoices = () => {
         onClose={() => setShowDetailModal(false)}
         invoice={selectedInvoice}
         type="sales"
+        onInvoiceUpdated={() => fetchInvoices(true)}
+        onViewReceipt={handleViewReceipt}
+        onUpdateInvoice={handleUpdateInvoice}
       />
 
       {/* Return/Exchange Modal */}
@@ -468,6 +478,13 @@ const SalesInvoices = () => {
         confirmColor="red"
         onConfirm={handleConfirmClose}
         onCancel={handleCancelClose}
+      />
+
+      {/* Receipt Modal */}
+      <SalesInvoiceModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        invoice={invoiceForReceipt}
       />
     </div>
   );

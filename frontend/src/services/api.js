@@ -72,6 +72,8 @@ export const salesInvoicesAPI = {
   getById: (id) => api.get(`/sales-invoices/${id}`),
   create: (data) => api.post("/sales-invoices", data),
   getNextInvoiceNumber: () => api.get("/sales-invoices/next-number"),
+  delete: (id) => api.delete(`/sales-invoices/${id}`),
+  update: (id, data) => api.patch(`/sales-invoices/${id}`, data),
 };
 
 // Return / Exchange API

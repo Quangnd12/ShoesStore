@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronUp, Eye, Trash2, Edit } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Trash2, Edit, Printer } from 'lucide-react';
 
 const InvoiceList = ({
   groupedInvoices,
@@ -8,13 +8,14 @@ const InvoiceList = ({
   onViewDetail,
   onDelete,
   onEdit,
+  onViewReceipt,
   type = 'purchase' // 'purchase' or 'sales'
 }) => {
   return (
     <div className="space-y-4">
       {groupedInvoices.map((group) => {
         const isExpanded = expandedDates[group.date];
-        
+
         return (
           <div key={group.date} className="bg-white rounded-lg shadow overflow-hidden">
             {/* Accordion Header */}
@@ -43,7 +44,7 @@ const InvoiceList = ({
                     <span className="flex items-center">
                       <span className="font-medium text-green-600">
                         {new Intl.NumberFormat("vi-VN").format(
-                          type === 'purchase' 
+                          type === 'purchase'
                             ? (group.totalCost || 0)
                             : (group.totalRevenue || 0)
                         )} ₫
@@ -90,7 +91,7 @@ const InvoiceList = ({
                           {invoice.invoice_number}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {type === 'purchase' 
+                          {type === 'purchase'
                             ? (invoice.supplier_name || "-")
                             : (invoice.customer_name || invoice.account_username || "-")
                           }
@@ -105,8 +106,8 @@ const InvoiceList = ({
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {new Intl.NumberFormat("vi-VN").format(
-                            type === 'purchase' 
-                              ? invoice.total_cost 
+                            type === 'purchase'
+                              ? invoice.total_cost
                               : (invoice.final_amount || invoice.total_revenue || 0)
                           )} đ
                         </td>
@@ -122,10 +123,19 @@ const InvoiceList = ({
                             {onEdit && (
                               <button
                                 onClick={() => onEdit(invoice.id)}
-                                className="text-green-600 hover:text-green-900"
-                                title="Hoàn trả/Đổi hàng"
+                                className={`${type === 'sales' ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-900'}`}
+                                title={type === 'sales' ? "Hoàn trả/Đổi hàng" : "Chỉnh sửa"}
                               >
                                 <Edit size={18} />
+                              </button>
+                            )}
+                            {type === 'sales' && onViewReceipt && (
+                              <button
+                                onClick={() => onViewReceipt(invoice.id)}
+                                className="text-green-600 hover:text-green-800"
+                                title="In hóa đơn"
+                              >
+                                <Printer size={18} />
                               </button>
                             )}
                             <button
